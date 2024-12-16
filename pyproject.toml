@@ -11,6 +11,7 @@ dependencies = [
     "google-generativeai>=0.8.3",
     "python-dotenv>=1.0.1",
     "pyyaml>=6.0.2",
+    "types-pyyaml>=6.0.12.20240917",
 ]
 
 [project.scripts]
@@ -34,3 +35,4 @@ preview = true
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
+strict = ["src/tupsar/model"]
