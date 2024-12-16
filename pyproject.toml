@@ -1,0 +1,31 @@
+[project]
+name = "tupsar"
+version = "0.1.0"
+description = "Digitise newspaper scans to articles"
+readme = "README.md"
+authors = [
+    { name = "Timothy Langer", email = "zeevox.dev@gamil.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "google-generativeai>=0.8.3",
+    "python-dotenv>=1.0.1",
+    "pyyaml>=6.0.2",
+]
+
+[project.scripts]
+tupsar = "tupsar:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.0.1",
+    "ruff>=0.8.3",
+]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "TID", "C4", "RUF"]
+preview = true
