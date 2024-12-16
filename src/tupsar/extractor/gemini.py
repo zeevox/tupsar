@@ -11,6 +11,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from google import generativeai as genai
+from google.ai.generativelanguage_v1beta.types.generative_service import Candidate
 
 from tupsar.extractor.base import BaseExtractor
 from tupsar.model.article import Article
@@ -87,23 +88,21 @@ class GeminiExtractor(BaseExtractor):
             ),
         )
 
-        if not response.text:
-            # Get termination reason
-            self.logger.error("No text returned from Gemini")
-            self.logger.error(
-                "Termination message: %s",
-                response.candidates[0].finish_message,
-            )
-            self.logger.error(
-                "Termination reason: %s",
-                response.candidates[0].finish_reason,
-            )
+        if not response.candidates:
+            self.logger.error("Gemini returned an empty response.")
+            return []
+
+        # Since we only requested one candidate, indexing is safe
+        candidate = response.candidates[0]
+
+        if (reason := candidate.finish_reason) != Candidate.FinishReason.STOP:
+            self.logger.error("Abnormal termination of output generation.")
+            self.logger.error("Reason: %s (code %d)", reason.name, reason.value)
             return []
 
         self.logger.info("Text extracted successfully")
 
-        log_prob: float = response.candidates[0].avg_logprobs
-        lin_prob: float = round(math.exp(log_prob), 2)
+        lin_prob: float = round(math.exp(candidate.avg_logprobs), 2)
         self.logger.info("Confidence: %.2f%%", lin_prob * 100)
 
         total_price: Decimal = self._get_response_cost(response)

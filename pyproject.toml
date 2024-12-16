@@ -35,4 +35,4 @@ preview = true
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
-strict = ["src/tupsar/model"]
+strict = ["src/tupsar/model", "src/tupsar/cli"]
