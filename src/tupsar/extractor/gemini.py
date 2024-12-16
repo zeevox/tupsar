@@ -122,7 +122,7 @@ class GeminiExtractor(BaseExtractor):
         """
         for article in json.loads(text):
             try:
-                yield Article.from_json(article)
+                yield Article(**article)
             except TypeError as e:
                 msg = f"Error parsing article {article}: {e}"
                 self.logger.exception(msg)

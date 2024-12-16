@@ -23,9 +23,14 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "pre-commit>=4.0.1",
+    "pyright>=1.1.390",
     "ruff>=0.8.3",
 ]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "UP", "TID", "C4", "RUF"]
 preview = true
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
