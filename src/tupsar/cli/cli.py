@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 
+import PIL.Image
 from dotenv import load_dotenv
 
 from tupsar.extractor import GeminiExtractor
@@ -25,7 +26,7 @@ def main() -> None:
     )
     output_path.mkdir(exist_ok=True, parents=True)
 
-    articles = GeminiExtractor().extract(Path(input_path))
+    articles = GeminiExtractor().extract(PIL.Image.open(input_path))
 
     # Print article text
     for idx, article in enumerate(articles):

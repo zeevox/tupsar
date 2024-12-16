@@ -1,17 +1,15 @@
 """Extracts text from a scan using Google's Gemini models."""
 
-import base64
 import json
 import logging
 import math
-import mimetypes
 import os
 from collections.abc import Generator
 from decimal import Decimal
-from pathlib import Path
 
 from google import generativeai as genai
 from google.ai.generativelanguage_v1beta.types.generative_service import Candidate
+from PIL.Image import Image
 
 from tupsar.extractor.base import BaseExtractor
 from tupsar.model.article import Article
@@ -61,7 +59,7 @@ class GeminiExtractor(BaseExtractor):
         genai.configure(api_key=(os.environ["GOOGLE_GEMINI_API_KEY"]))
         self.model = genai.GenerativeModel("gemini-1.5-flash-002")
 
-    def extract(self, path: Path) -> list[Article]:
+    def extract(self, image: Image) -> list[Article]:
         """Extract text from the provided scanned page using Gemini.
 
         Args:
@@ -71,15 +69,8 @@ class GeminiExtractor(BaseExtractor):
             A list of extracted articles from the scanned page.
 
         """
-        self.logger.info("Extracting text from %s", path)
-
-        image_data = {
-            "data": base64.b64encode(path.read_bytes()).decode("utf-8"),
-            "mime_type": mimetypes.guess_file_type(path)[0],
-        }
-
         response = self.model.generate_content(
-            contents=[PROMPT, image_data],
+            contents=[PROMPT, image],
             generation_config=(
                 genai.types.GenerationConfig(
                     response_mime_type="application/json",

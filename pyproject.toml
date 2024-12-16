@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "google-generativeai>=0.8.3",
+    "pillow>=11.0.0",
     "python-dotenv>=1.0.1",
     "pyyaml>=6.0.2",
     "types-pyyaml>=6.0.12.20240917",
