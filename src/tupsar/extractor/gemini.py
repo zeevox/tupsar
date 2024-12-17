@@ -7,6 +7,7 @@ import os
 from collections.abc import Generator
 from decimal import Decimal
 
+import rich
 from google import generativeai as genai
 from google.ai.generativelanguage_v1beta.types.generative_service import Candidate
 from PIL.Image import Image
@@ -63,7 +64,7 @@ class GeminiExtractor(BaseExtractor):
         """Extract text from the provided scanned page using Gemini.
 
         Args:
-            path: Path to the image file to extract text from.
+            image: The scanned page to extract text from.
 
         Returns:
             A list of extracted articles from the scanned page.
@@ -86,18 +87,30 @@ class GeminiExtractor(BaseExtractor):
         # Since we only requested one candidate, indexing is safe
         candidate = response.candidates[0]
 
-        if (reason := candidate.finish_reason) != Candidate.FinishReason.STOP:
-            self.logger.error("Abnormal termination of output generation.")
-            self.logger.error("Reason: %s (code %d)", reason.name, reason.value)
-            return []
-
-        self.logger.info("Text extracted successfully")
-
         lin_prob: float = round(math.exp(candidate.avg_logprobs), 2)
         self.logger.info("Confidence: %.2f%%", lin_prob * 100)
 
         total_price: Decimal = self._get_response_cost(response)
         self.logger.info("Total price: $%s", total_price)
+
+        if (reason := candidate.finish_reason) != Candidate.FinishReason.STOP:
+            self.logger.error(
+                "Abnormal termination of output generation. Reason: %s (code %d)",
+                reason.name,
+                reason.value,
+            )
+
+            if reason == Candidate.FinishReason.RECITATION:
+                sources = {
+                    source.uri
+                    for source in candidate.citation_metadata.citation_sources
+                    if source.uri
+                }
+                rich.print(sources)
+
+            return []
+
+        self.logger.info("Text extracted successfully")
 
         return list(self._get_articles(response.text))
 

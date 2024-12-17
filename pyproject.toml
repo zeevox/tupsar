@@ -10,8 +10,12 @@ requires-python = ">=3.13"
 dependencies = [
     "google-generativeai>=0.8.3",
     "pillow>=11.0.0",
+    "pymupdf>=1.25.1",
     "python-dotenv>=1.0.1",
+    "python-magic>=0.4.27",
     "pyyaml>=6.0.2",
+    "rich-argparse>=1.6.0",
+    "rich>=13.9.4",
     "types-pyyaml>=6.0.12.20240917",
 ]
 
