@@ -8,11 +8,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 from PIL.ImageFile import ImageFile
 from rich.logging import RichHandler
+from rich.status import Status
 from rich_argparse import RichHelpFormatter
 
 from tupsar.extractor.azure import AzureDocumentExtractor
 from tupsar.extractor.gemini import GeminiExtractor
-from tupsar.file.image import open_image
+from tupsar.file.image import binarize_image, open_image
 from tupsar.file.mime import FileType
 from tupsar.file.pdf import process_pdf
 from tupsar.model.article import Article
@@ -78,6 +79,12 @@ def main() -> None:
         default="gemini",
         help="Extractor to use",
     )
+    parser.add_argument(
+        "--binarize",
+        action="store_true",
+        help="Binarize images before processing",
+        default=False,
+    )
     args = parser.parse_args()
 
     # Set logging verbosity
@@ -104,9 +111,15 @@ def main() -> None:
 
     def get_articles() -> Iterator[Article]:
         for page in pages:
-            yield from extractor.extract(page)
+            yield from extractor.extract(
+                binarize_image(page) if args.binarize else page,
+            )
 
     # Print article text
+    status = Status("Extracting articles...")
+    status.start()
     for idx, article in enumerate(get_articles()):
+        status.update(f"Saving article {idx + 1}: {article.headline}")
         article_path = output_path / f"{idx:03d}_{article.slug}.md"
         article.write_out(article_path)
+    status.stop()
