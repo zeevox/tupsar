@@ -13,14 +13,15 @@ from google.ai.generativelanguage_v1beta.types.generative_service import Candida
 from PIL.Image import Image
 
 from tupsar.extractor import BaseExtractor
+from tupsar.file.image import binarize_image
 from tupsar.model.article import Article
 
 PROMPT = """
-Extract all text pieces from this scan of Felix, the Imperial College student newspaper.
-Ignore advertisements.
-Write in Markdown, preserving text formatting.
-Fix typographical errors and remove hyphenation.
-Separate paragraphs with one blank line.
+Extract all text pieces from this scan of Felix, the Imperial College student newspaper
+Ignore advertisements
+Fix any typos and remove hyphenation
+Country: United Kingdom
+Language: en-GB
 """.strip()
 
 
@@ -35,17 +36,12 @@ RESPONSE_SCHEMA = {
                 "description": "AKA subhead or dek, if present",
             },
             "author_name": {"type": "STRING"},
-            "section": {
+            "text_body": {
                 "type": "STRING",
-                "description": "Section of the newspaper e.g. News, Opinion, Sport",
-            },
-            "text_body": {"type": "STRING"},
-            "slug": {
-                "type": "STRING",
-                "description": "URL slug uniquely identifies article across issues",
+                "description": "The text of the article, in Markdown",
             },
         },
-        "required": ["headline", "section", "text_body", "slug"],
+        "required": ["headline", "text_body"],
     },
 }
 
@@ -70,8 +66,15 @@ class GeminiExtractor(BaseExtractor):
             A list of extracted articles from the scanned page.
 
         """
+        # Resize the image to 3072 pixels on the longest side
+        image.thumbnail((3072, 3072))
+
+        # Binarize the image
+        binarized = binarize_image(image)
+
         response = self.model.generate_content(
-            contents=[PROMPT, image],
+            # Google says to place the prompt after the image for best results.
+            contents=[binarized, PROMPT],
             generation_config=(
                 genai.types.GenerationConfig(
                     response_mime_type="application/json",
@@ -125,7 +128,12 @@ class GeminiExtractor(BaseExtractor):
         """
         for article in json.loads(text):
             try:
-                yield Article(**article)
+                yield Article(
+                    headline=article["headline"],
+                    text_body=article["text_body"],
+                    strapline=article.get("strapline"),
+                    author_name=article.get("author_name"),
+                )
             except TypeError as e:
                 msg = f"Error parsing article {article}: {e}"
                 self.logger.exception(msg)

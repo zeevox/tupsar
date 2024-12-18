@@ -3,8 +3,6 @@
 import dataclasses
 import logging
 import os
-import re
-import unicodedata
 
 from azure.ai.documentintelligence import DocumentIntelligenceClient
 from azure.ai.documentintelligence.models import (
@@ -43,9 +41,7 @@ class AzureDocumentExtractor(BaseExtractor):
         def to_article(self) -> Article:
             return Article(
                 headline=self.title,
-                section="",
                 text_body="\n\n".join(self.paragraphs),
-                slug=slugify(self.title),
             )
 
     def extract(self, image: Image) -> list[Article]:
@@ -57,7 +53,7 @@ class AzureDocumentExtractor(BaseExtractor):
         )
         poller = self.client.begin_analyze_document(
             "prebuilt-layout",
-            analyze_request=AnalyzeDocumentRequest(bytes_source=get_image_bytes(image)),
+            AnalyzeDocumentRequest(bytes_source=get_image_bytes(image)),
             features=[DocumentAnalysisFeature.OCR_HIGH_RESOLUTION],
         )
         result = poller.result()
@@ -116,24 +112,3 @@ class AzureDocumentExtractor(BaseExtractor):
                         )
 
         return [section.to_article() for section in text_content]
-
-
-def slugify(text: str) -> str:
-    """Convert a string to a hyphen-separated lowercase string.
-
-    :param text: The string to convert
-    :return: The string as a slug
-    """
-    # Normalise Unicode characters to their closest ASCII representation
-    normalized = unicodedata.normalize("NFKD", text)
-    ascii_bytes = normalized.encode("ascii", "ignore")
-    ascii_str = ascii_bytes.decode("ascii")
-
-    # Convert to lowercase
-    lowercased = ascii_str.lower()
-
-    # Replace any non-alphanumeric characters with hyphens
-    hyphenated = re.sub(r"[^a-z0-9]+", "-", lowercased)
-
-    # Remove leading and trailing hyphens
-    return hyphenated.strip("-")
