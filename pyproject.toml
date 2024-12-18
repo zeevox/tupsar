@@ -19,6 +19,7 @@ dependencies = [
     "azure-ai-documentintelligence>=1.0.0b4",
     "pyright>=1.1.391",
     "scikit-image>=0.25.0",
+    "ijson>=3.3.0",
 ]
 
 [project.scripts]

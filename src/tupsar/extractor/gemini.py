@@ -8,9 +8,13 @@ from collections.abc import Iterator
 from decimal import Decimal
 
 import google.generativeai as genai
+import ijson
 import rich
+from google.ai.generativelanguage_v1beta import HarmCategory
 from google.ai.generativelanguage_v1beta.types.generative_service import Candidate
+from google.generativeai.types import HarmBlockThreshold as Threshold
 from PIL.Image import Image
+from rich.status import Status
 
 from tupsar.extractor import BaseExtractor
 from tupsar.file.image import binarize_image
@@ -19,7 +23,7 @@ from tupsar.model.article import Article
 PROMPT = """
 Extract all text pieces from this scan of Felix, the Imperial College student newspaper
 Ignore advertisements
-Fix any typos and remove hyphenation
+Fix any typos
 Country: United Kingdom
 Language: en-GB
 """.strip()
@@ -54,9 +58,9 @@ class GeminiExtractor(BaseExtractor):
     def __init__(self) -> None:
         """Initialise a new extractor instance."""
         genai.configure(api_key=(os.environ["GOOGLE_GEMINI_API_KEY"]))
-        self.model = genai.GenerativeModel("gemini-1.5-flash-002")
+        self.model = genai.GenerativeModel("gemini-2.0-flash-exp")
 
-    def extract(self, image: Image) -> list[Article]:
+    def extract(self, image: Image) -> Iterator[Article]:
         """Extract text from the provided scanned page using Gemini.
 
         Args:
@@ -66,26 +70,73 @@ class GeminiExtractor(BaseExtractor):
             A list of extracted articles from the scanned page.
 
         """
+        status = Status("Extracting text from scan...")
+        status.start()
+
         # Resize the image to 3072 pixels on the longest side
+        status.update("Resizing image...")
         image.thumbnail((3072, 3072))
 
         # Binarize the image
+        status.update("Binarizing image...")
         binarized = binarize_image(image)
 
+        status.update("Calling Gemini...")
         response = self.model.generate_content(
             # Google says to place the prompt after the image for best results.
             contents=[binarized, PROMPT],
+            stream=True,
             generation_config=(
                 genai.types.GenerationConfig(
                     response_mime_type="application/json",
                     response_schema=RESPONSE_SCHEMA,
                 )
             ),
+            safety_settings={
+                HarmCategory.HARM_CATEGORY_HARASSMENT: Threshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: Threshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: Threshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: Threshold.BLOCK_NONE,
+            },
         )
+
+        events = ijson.sendable_list()
+        coro = ijson.items_coro(events, "item")
+
+        total_tokens: int = 0
+        for chunk in response:
+            if not chunk.candidates[0].content.parts:
+                self.logger.warning("Received no chunks")
+                continue
+
+            chunk_text: str = chunk.candidates[0].content.parts[0].text
+            if not chunk_text:
+                self.logger.warning("Received empty chunk")
+                continue
+
+            self.logger.debug("Received chunk: %s", chunk_text)
+            total_tokens += self.model.count_tokens(chunk_text).total_tokens
+            status.update(f"Generated {total_tokens} tokens...")
+
+            coro.send(chunk_text.encode("utf-8"))
+
+            # Yield any fully parsed articles
+            for parsed_obj in events:
+                yield Article(
+                    headline=parsed_obj["headline"],
+                    text_body=parsed_obj["text_body"],
+                    strapline=parsed_obj.get("strapline"),
+                    author_name=parsed_obj.get("author_name"),
+                )
+
+            # Clear the list to prepare for the next batch
+            del events[:]
+
+        coro.close()
 
         if not response.candidates:
             self.logger.error("Gemini returned an empty response.")
-            return []
+            raise StopIteration
 
         # Since we only requested one candidate, indexing is safe
         candidate = response.candidates[0]
@@ -111,11 +162,10 @@ class GeminiExtractor(BaseExtractor):
                 }
                 rich.print(sources)
 
-            return []
+            raise StopIteration
 
+        status.stop()
         self.logger.info("Text extracted successfully")
-
-        return list(self._get_articles(response.text))
 
     def _get_articles(self, text: str) -> Iterator[Article]:
         """Attempt to load the articles from the LLM response.

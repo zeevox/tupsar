@@ -2,13 +2,12 @@
 
 import argparse
 import logging
+from collections.abc import Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
 from PIL.ImageFile import ImageFile
 from rich.logging import RichHandler
-from rich.progress import track
 from rich_argparse import RichHelpFormatter
 
 from tupsar.extractor.azure import AzureDocumentExtractor
@@ -16,9 +15,7 @@ from tupsar.extractor.gemini import GeminiExtractor
 from tupsar.file.image import open_image
 from tupsar.file.mime import FileType
 from tupsar.file.pdf import process_pdf
-
-if TYPE_CHECKING:
-    from tupsar.model.article import Article
+from tupsar.model.article import Article
 
 logger = logging.getLogger("tupsar")
 
@@ -105,11 +102,11 @@ def main() -> None:
 
     extractor = extractors[args.extractor]()
 
-    articles: list[Article] = []
-    for page in track(pages):
-        articles.extend(extractor.extract(page))
+    def get_articles() -> Iterator[Article]:
+        for page in pages:
+            yield from extractor.extract(page)
 
     # Print article text
-    for idx, article in enumerate(articles):
-        article_path = output_path / f"{idx}_{article.slug}.md"
+    for idx, article in enumerate(get_articles()):
+        article_path = output_path / f"{idx:03d}_{article.slug}.md"
         article.write_out(article_path)

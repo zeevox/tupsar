@@ -3,6 +3,7 @@
 import dataclasses
 import logging
 import os
+from collections.abc import Iterator
 
 from azure.ai.documentintelligence import DocumentIntelligenceClient
 from azure.ai.documentintelligence.models import (
@@ -44,7 +45,7 @@ class AzureDocumentExtractor(BaseExtractor):
                 text_body="\n\n".join(self.paragraphs),
             )
 
-    def extract(self, image: Image) -> list[Article]:
+    def extract(self, image: Image) -> Iterator[Article]:
         """Extract text from an image using Azure Document Intelligence."""
         self.logger.info(
             "Extracting text from %s (%s) using Azure Document Intelligence",
@@ -111,4 +112,5 @@ class AzureDocumentExtractor(BaseExtractor):
                             paragraph.content,
                         )
 
-        return [section.to_article() for section in text_content]
+        for section in text_content:
+            yield section.to_article()

@@ -291,6 +291,12 @@ wheels = [
 ]
 
 [[package]]
+name = "ijson"
+version = "3.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6c/83/28e9e93a3a61913e334e3a2e78ea9924bb9f9b1ac45898977f9d9dd6133f/ijson-3.3.0.tar.gz", hash = "sha256:7f172e6ba1bee0d4c8f8ebd639577bfe429dee0f3f96775a067b8bae4492d8a0", size = 60079 }
+
+[[package]]
 name = "imageio"
 version = "2.36.1"
 source = { registry = "https://pypi.org/simple" }
@@ -812,6 +818,7 @@ source = { editable = "." }
 dependencies = [
     { name = "azure-ai-documentintelligence" },
     { name = "google-generativeai" },
+    { name = "ijson" },
     { name = "pillow" },
     { name = "pymupdf" },
     { name = "pyright" },
@@ -836,6 +843,7 @@ dev = [
 requires-dist = [
     { name = "azure-ai-documentintelligence", specifier = ">=1.0.0b4" },
     { name = "google-generativeai", specifier = ">=0.8.3" },
+    { name = "ijson", specifier = ">=3.3.0" },
     { name = "pillow", specifier = ">=11.0.0" },
     { name = "pymupdf", specifier = ">=1.25.1" },
     { name = "pyright", specifier = ">=1.1.391" },
