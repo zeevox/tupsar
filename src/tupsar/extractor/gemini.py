@@ -12,7 +12,7 @@ from google import generativeai as genai
 from google.ai.generativelanguage_v1beta.types.generative_service import Candidate
 from PIL.Image import Image
 
-from tupsar.extractor.base import BaseExtractor
+from tupsar.extractor import BaseExtractor
 from tupsar.model.article import Article
 
 PROMPT = """

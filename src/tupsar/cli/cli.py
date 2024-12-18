@@ -1,52 +1,53 @@
+"""The `tupsar` command-line interface."""
+
 import argparse
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import PIL.Image
 from dotenv import load_dotenv
 from PIL.ImageFile import ImageFile
 from rich.logging import RichHandler
 from rich.progress import track
 from rich_argparse import RichHelpFormatter
 
-from tupsar.extractor import GeminiExtractor
+from tupsar.extractor.azure import AzureDocumentExtractor
+from tupsar.extractor.gemini import GeminiExtractor
+from tupsar.file.image import open_image
 from tupsar.file.mime import FileType
-from tupsar.file.pdf import get_pdf_pages
-from tupsar.model.article import Article
+from tupsar.file.pdf import process_pdf
+
+if TYPE_CHECKING:
+    from tupsar.model.article import Article
+
+logger = logging.getLogger("tupsar")
 
 
-def process_image(file_path: Path) -> ImageFile:
-    try:
-        with PIL.Image.open(file_path) as img:
-            img.verify()  # Verify integrity
-        return PIL.Image.open(file_path)  # Reopen for processing
-    except (OSError, SyntaxError) as e:
-        raise ValueError(f"Invalid image file {file_path}: {e}")
-
-
-def process_pdf(file_path: Path) -> list[ImageFile]:
-    return list(get_pdf_pages(str(file_path)))
-
-
-def process_files(file_paths: list[Path]) -> list[ImageFile]:
+def _process_files(file_paths: list[Path]) -> list[ImageFile]:
     processed_images: list[ImageFile] = []
     for path in file_paths:
         try:
             match FileType.of(path):
                 case FileType.IMAGE:
-                    img = process_image(path)
+                    img = open_image(path)
                     processed_images.append(img)
                 case FileType.PDF:
                     pages = process_pdf(path)
                     processed_images.extend(pages)
-        except ValueError as ve:
-            print(f"Error processing {path}: {ve}")
+        except ValueError:
+            logger.exception("Could not process %s", path)
     return processed_images
 
 
 def main() -> None:
+    """Handle the tupsar command-line interface."""
     if not load_dotenv():
         raise FileNotFoundError
+
+    extractors = {
+        "azure": AzureDocumentExtractor,
+        "gemini": GeminiExtractor,
+    }
 
     # Set up argument parser
     parser = argparse.ArgumentParser(formatter_class=RichHelpFormatter)
@@ -73,6 +74,13 @@ def main() -> None:
         default=0,
         help="Verbosity (can specify multiple times)",
     )
+    parser.add_argument(
+        "-e",
+        "--extractor",
+        choices=extractors.keys(),
+        default="gemini",
+        help="Extractor to use",
+    )
     args = parser.parse_args()
 
     # Set logging verbosity
@@ -90,14 +98,16 @@ def main() -> None:
     )
 
     inputs: list[Path] = args.inputs
-    pages: list[ImageFile] = process_files(inputs)
+    pages: list[ImageFile] = _process_files(inputs)
 
     output_path: Path = args.output_path
     output_path.mkdir(exist_ok=True, parents=True)
 
+    extractor = extractors[args.extractor]()
+
     articles: list[Article] = []
     for page in track(pages):
-        articles.extend(GeminiExtractor().extract(page))
+        articles.extend(extractor.extract(page))
 
     # Print article text
     for idx, article in enumerate(articles):

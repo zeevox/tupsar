@@ -17,6 +17,7 @@ dependencies = [
     "rich-argparse>=1.6.0",
     "rich>=13.9.4",
     "types-pyyaml>=6.0.12.20240917",
+    "azure-ai-documentintelligence>=1.0.0b4",
 ]
 
 [project.scripts]
@@ -34,8 +35,20 @@ dev = [
 ]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I", "UP", "TID", "C4", "RUF"]
 preview = true
+
+# Enable all the rules
+select = ["ALL"]
+fixable = ["ALL"]
+
+ignore = [
+    # Disable pydoclint rules, since they do not support Sphinx docstrings
+    # see https://github.com/astral-sh/ruff/issues/12434
+    "DOC",
+
+    # Disable copyright header check
+    "CPY",
+]
 
 [tool.pyright]
 venvPath = "."

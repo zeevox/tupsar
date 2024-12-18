@@ -1,1 +1,1 @@
-from .cli import main as main
+"""Provides a command-line interface for `tupsar`."""
