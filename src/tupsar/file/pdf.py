@@ -1,6 +1,6 @@
 """Utility functions for working with PDF files."""
 
-from collections.abc import Generator
+from collections.abc import Iterator
 from pathlib import Path
 
 import fitz
@@ -8,7 +8,7 @@ from PIL import Image
 from PIL.ImageFile import ImageFile
 
 
-def get_pdf_pages(pdf_path: str) -> Generator[ImageFile]:
+def get_pdf_pages(pdf_path: str) -> Iterator[ImageFile]:
     """Load the pages of a scanned document one-by-one."""
     with fitz.open(pdf_path) as doc:
         for page_no in range(doc.page_count):

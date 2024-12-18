@@ -12,3 +12,9 @@ repos:
     rev: v1.1.390
     hooks:
       - id: pyright
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.9.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-PyYAML]
+        args: [--config-file=./pyproject.toml]

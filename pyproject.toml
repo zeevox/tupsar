@@ -29,6 +29,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "mypy>=1.13.0",
     "pre-commit>=4.0.1",
     "pyright>=1.1.390",
     "ruff>=0.8.3",
@@ -54,3 +55,9 @@ ignore = [
 venvPath = "."
 venv = ".venv"
 strict = ["src/tupsar/model", "src/tupsar/cli"]
+
+[tool.mypy]
+# Avoid type-checking untyped libraries
+ignore_missing_imports = true
+# Use strict mode
+strict = true

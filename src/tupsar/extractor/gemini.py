@@ -4,11 +4,11 @@ import json
 import logging
 import math
 import os
-from collections.abc import Generator
+from collections.abc import Iterator
 from decimal import Decimal
 
+import google.generativeai as genai
 import rich
-from google import generativeai as genai
 from google.ai.generativelanguage_v1beta.types.generative_service import Candidate
 from PIL.Image import Image
 
@@ -114,7 +114,7 @@ class GeminiExtractor(BaseExtractor):
 
         return list(self._get_articles(response.text))
 
-    def _get_articles(self, text: str) -> Generator[Article]:
+    def _get_articles(self, text: str) -> Iterator[Article]:
         """Attempt to load the articles from the LLM response.
 
         Log and skip any malformed articles that fail to parse.
