@@ -3,6 +3,7 @@
 import dataclasses
 import pathlib
 import re
+import textwrap
 import unicodedata
 
 import yaml
@@ -20,12 +21,12 @@ class Article:
     @property
     def slug(self) -> str:
         """Turn the headline into a slug."""
-        return slugify(self.headline)
+        return slugify(textwrap.shorten(self.headline, width=60))
 
     def write_out(self, output_path: pathlib.Path) -> None:
         """Save the article to a Markdown file."""
         article_meta = {
-            "title": self.headline,
+            "title": self.headline.replace("\n", " "),
             "subtitle": self.strapline,
             "author": self.author_name,
             "slug": self.slug,

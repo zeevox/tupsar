@@ -12,6 +12,7 @@ import google.generativeai as genai
 import ijson
 from google.ai.generativelanguage_v1beta import HarmCategory
 from google.ai.generativelanguage_v1beta.types.generative_service import Candidate
+from google.api_core.exceptions import InternalServerError
 from google.generativeai.types import HarmBlockThreshold as Threshold
 from PIL.Image import Image
 
@@ -22,6 +23,7 @@ RESPONSE_SCHEMA = {
     "type": "ARRAY",
     "items": {
         "type": "OBJECT",
+        "description": "A newspaper article",
         "properties": {
             "headline": {"type": "STRING"},
             "strapline": {
@@ -39,18 +41,13 @@ RESPONSE_SCHEMA = {
 }
 
 
+class GeminiGenerationError(BaseException):
+    """Base exception for Gemini-related errors."""
+
+
 @dataclasses.dataclass
 class _GeminiModel:
     name: str
-
-    prompt: str = (
-        "Extract all text pieces from this newspaper scan."
-        "Ignore advertisements."
-        "Fix any typos."
-        "Source: Felix (Imperial College student newspaper)"
-        "Country: United Kingdom"
-        "Language: en-GB"
-    )
 
     input_rate: Decimal = Decimal("0.000000075")  # $0.075 per million
     """Input cost per token, in USD"""
@@ -60,6 +57,15 @@ class _GeminiModel:
 
     cached_rate: Decimal = Decimal("0.00000001875")  # $0.01875 per million
     """Cost per cached token, in USD"""
+
+    prompt: str = (
+        "Extract all the text from this newspaper scan."
+        "Ignore advertisements."
+        "Fix any typos."
+        "Source: Felix (Imperial College student newspaper)"
+        "Country: United Kingdom"
+        "Language: en-GB"
+    )
 
     def __post_init__(self) -> None:
         self.logger = logging.getLogger(__name__)
@@ -111,8 +117,7 @@ class _GeminiModel:
             yield chunk_text
 
         if not response.candidates:
-            self.logger.error("Gemini returned an empty response.")
-            raise StopIteration
+            raise GeminiGenerationError
 
         # Since we only requested one candidate, indexing is safe
         candidate = response.candidates[0]
@@ -136,7 +141,7 @@ class _GeminiModel:
                 extra=extras or None,
             )
 
-            raise StopIteration
+            raise GeminiGenerationError
 
         lin_prob: float = round(math.exp(candidate.avg_logprobs), 2)
         self.logger.info("Confidence: %.2f%%", lin_prob * 100)
@@ -178,20 +183,9 @@ class GeminiExtractor(BaseExtractor):
         """Initialise a new extractor instance."""
         genai.configure(api_key=(os.environ["GOOGLE_GEMINI_API_KEY"]))
 
-    def extract(self, image: Image) -> Iterator[Article]:
-        """Extract text from the provided scanned page using Gemini.
-
-        Args:
-            image: The scanned page to extract text from.
-
-        Returns:
-            A list of extracted articles from the scanned page.
-
-        """
+    def _extract(self, model: _GeminiModel, image: Image) -> Iterator[Article]:
         # Resize the image to 3072 pixels on the longest side
         image.thumbnail((3072, 3072))
-
-        model = _GeminiModel("gemini-2.0-flash-exp")
 
         events = ijson.sendable_list()
         coro = ijson.items_coro(events, "item")
@@ -213,4 +207,43 @@ class GeminiExtractor(BaseExtractor):
 
         coro.close()
 
+        if events:
+            self.logger.warning("Leftover objects remain after parsing")
+
         self.logger.info("Text extracted successfully")
+
+    def extract(self, image: Image) -> Iterator[Article]:
+        """Extract text from the provided scanned page using Gemini.
+
+        Args:
+            image: The scanned page to extract text from.
+
+        Returns:
+            A list of extracted articles from the scanned page.
+
+        """
+        models = [
+            _GeminiModel(
+                "gemini-1.5-flash-002",
+                input_rate=Decimal("0.000000075"),  # $0.075 per million
+                output_rate=Decimal("0.0000003"),  # $0.30 per million
+                cached_rate=Decimal("0.00000001875"),  # $0.01875 per million
+            ),
+            _GeminiModel(
+                "gemini-2.0-flash-exp",
+                input_rate=Decimal(0),
+                output_rate=Decimal(0),
+                cached_rate=Decimal(0),
+            ),
+        ]
+
+        # Use the first model that does not raise a GeminiGenerationError
+        for model in models:
+            try:
+                yield from self._extract(model, image)
+                break
+            except (GeminiGenerationError, InternalServerError):
+                self.logger.warning("Model %s failed to generate output", model.name)
+        else:
+            self.logger.error("All models failed to generate output; skipping page.")
+            raise StopIteration

@@ -2,13 +2,13 @@
 
 import argparse
 import logging
-from collections.abc import Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
 from PIL.ImageFile import ImageFile
 from rich.logging import RichHandler
-from rich.status import Status
+from rich.progress import track
 from rich_argparse import RichHelpFormatter
 
 from tupsar.extractor.azure import AzureDocumentExtractor
@@ -16,7 +16,11 @@ from tupsar.extractor.gemini import GeminiExtractor
 from tupsar.file.image import binarize_image, open_image
 from tupsar.file.mime import FileType
 from tupsar.file.pdf import process_pdf
-from tupsar.model.article import Article
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from tupsar.model.article import Article
 
 logger = logging.getLogger("tupsar")
 
@@ -85,6 +89,12 @@ def main() -> None:
         help="Binarize images before processing",
         default=False,
     )
+    parser.add_argument(
+        "--skip-first",
+        dest="start_from",
+        type=int,
+        help="Skip the first N pages",
+    )
     args = parser.parse_args()
 
     # Set logging verbosity
@@ -104,22 +114,24 @@ def main() -> None:
     inputs: list[Path] = args.inputs
     pages: list[ImageFile] = _process_files(inputs)
 
-    output_path: Path = args.output_path
-    output_path.mkdir(exist_ok=True, parents=True)
+    if args.start_from and args.start_from > len(pages):
+        logger.error("Cannot skip more pages than there are")
+        return
 
+    output_path: Path = args.output_path
     extractor = extractors[args.extractor]()
 
-    def get_articles() -> Iterator[Article]:
-        for page in pages:
-            yield from extractor.extract(
-                binarize_image(page) if args.binarize else page,
-            )
+    for page_no, page in enumerate(track(pages, description="Processing pages")):
+        if args.start_from and page_no < args.start_from:
+            continue
 
-    # Print article text
-    status = Status("Extracting articles...")
-    status.start()
-    for idx, article in enumerate(get_articles()):
-        status.update(f"Saving article {idx + 1}: {article.headline}")
-        article_path = output_path / f"{idx:03d}_{article.slug}.md"
-        article.write_out(article_path)
-    status.stop()
+        articles: Iterator[Article] = extractor.extract(
+            binarize_image(page) if args.binarize else page,
+        )
+
+        page_dir = output_path / f"{page_no + 1:03d}"
+        page_dir.mkdir(exist_ok=True, parents=True)
+
+        for idx, article in enumerate(articles):
+            filename = f"{idx + 1:03d}_{article.slug}.md"
+            article.write_out(page_dir / filename)
