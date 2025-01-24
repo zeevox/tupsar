@@ -1,5 +1,5 @@
 """Utility functions for working with PDF files."""
-
+import io
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -16,7 +16,7 @@ def get_pdf_pages(pdf_path: str) -> Iterator[ImageFile]:
             for image in images:
                 xref = image[0]
                 base_image = doc.extract_image(xref)
-                yield Image.open(base_image["image"])
+                yield Image.open(io.BytesIO(base_image["image"]))
 
 
 def process_pdf(file_path: Path) -> list[ImageFile]:

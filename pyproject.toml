@@ -8,15 +8,15 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "google-generativeai>=0.8.3",
+    "google-generativeai>=0.8.4",
     "pillow>=11.0.0",
-    "pymupdf>=1.25.1",
+    "pymupdf>=1.25.2",
     "python-dotenv>=1.0.1",
     "python-magic>=0.4.27",
     "pyyaml>=6.0.2",
     "rich-argparse>=1.6.0",
     "rich>=13.9.4",
-    "azure-ai-documentintelligence>=1.0.0b4",
+    "azure-ai-documentintelligence>=1.0.0",
     "pyright>=1.1.391",
     "scikit-image>=0.25.0",
     "ijson>=3.3.0",

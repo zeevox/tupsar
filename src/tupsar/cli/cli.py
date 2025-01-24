@@ -44,7 +44,7 @@ def _process_files(file_paths: list[Path]) -> list[ImageFile]:
 def main() -> None:
     """Handle the tupsar command-line interface."""
     if not load_dotenv():
-        raise FileNotFoundError
+        logger.warning("No .env file containing API keys found")
 
     extractors = {
         "azure": AzureDocumentExtractor,
