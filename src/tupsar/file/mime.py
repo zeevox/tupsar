@@ -1,3 +1,5 @@
+"""Helpers for handling mime types."""
+
 from enum import Enum, auto
 from pathlib import Path
 
@@ -5,6 +7,8 @@ import magic
 
 
 class FileType(Enum):
+    """Represents the type of the input file and provides helper methods."""
+
     IMAGE = auto()
     PDF = auto()
 
@@ -12,6 +16,7 @@ class FileType(Enum):
     def of(file_path: Path) -> "FileType":
         """
         Determine the MIME type of a file and return the corresponding FileType.
+
         Raises ValueError for unsupported file types.
         """
         mime = magic.Magic(mime=True)
@@ -19,7 +24,7 @@ class FileType(Enum):
 
         if mime_type.startswith("image/"):
             return FileType.IMAGE
-        elif mime_type == "application/pdf":
+        if mime_type == "application/pdf":
             return FileType.PDF
-        else:
-            raise ValueError(f"Unsupported file type: {mime_type} for file {file_path}")
+        msg = f"Unsupported file type: {mime_type} for file {file_path}"
+        raise ValueError(msg)

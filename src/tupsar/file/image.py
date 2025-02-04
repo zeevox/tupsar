@@ -32,7 +32,8 @@ def open_image(file_path: Path) -> ImageFile:
 
 
 def binarize_image(image: Image) -> Image:
-    """Turn an image black-and-white.
+    """
+    Turn an image black-and-white.
 
     Args:
         image (Image): Input image.

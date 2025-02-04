@@ -1,4 +1,5 @@
 """Utility functions for working with PDF files."""
+
 import io
 from collections.abc import Iterator
 from pathlib import Path

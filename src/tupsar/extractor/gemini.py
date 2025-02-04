@@ -150,7 +150,8 @@ class _GeminiModel:
         self,
         response: genai.types.GenerateContentResponse,
     ) -> Decimal:
-        """Calculate the cost of a single model response.
+        """
+        Calculate the cost of a single model response.
 
         Args:
             response: The model response to calculate for
@@ -213,7 +214,8 @@ class GeminiExtractor(BaseExtractor):
         self.logger.info("Text extracted successfully")
 
     def extract(self, image: Image) -> Iterator[Article]:
-        """Extract text from the provided scanned page using Gemini.
+        """
+        Extract text from the provided scanned page using Gemini.
 
         Args:
             image: The scanned page to extract text from.

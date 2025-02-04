@@ -9,7 +9,7 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "google-generativeai>=0.8.4",
-    "pillow>=11.0.0",
+    "pillow>=11.1.0",
     "pymupdf>=1.25.2",
     "python-dotenv>=1.0.1",
     "python-magic>=0.4.27",
@@ -17,8 +17,8 @@ dependencies = [
     "rich-argparse>=1.6.0",
     "rich>=13.9.4",
     "azure-ai-documentintelligence>=1.0.0",
-    "pyright>=1.1.391",
-    "scikit-image>=0.25.0",
+    "pyright>=1.1.393",
+    "scikit-image>=0.25.1",
     "ijson>=3.3.0",
 ]
 
@@ -31,11 +31,11 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "mypy>=1.13.0",
-    "pre-commit>=4.0.1",
-    "pyright>=1.1.390",
-    "ruff>=0.8.3",
-    "types-pyyaml>=6.0.12.20240917",
+    "mypy>=1.14.1",
+    "pre-commit>=4.1.0",
+    "pyright>=1.1.393",
+    "ruff>=0.9.4",
+    "types-pyyaml>=6.0.12.20241230",
 ]
 
 [tool.uv]
@@ -55,6 +55,10 @@ ignore = [
 
     # Disable copyright header check
     "CPY",
+
+    "D203", # prefer D211
+    "D212", # prefer D213
+    "COM812", # unnecessary rule
 ]
 
 [tool.pyright]

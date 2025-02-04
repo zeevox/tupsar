@@ -38,7 +38,8 @@ class Article:
 
 
 def slugify(text: str) -> str:
-    """Convert a string to a hyphen-separated lowercase string.
+    """
+    Convert a string to a hyphen-separated lowercase string.
 
     :param text: The string to convert
     :return: The string as a slug

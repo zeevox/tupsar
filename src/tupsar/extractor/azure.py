@@ -23,7 +23,8 @@ class AzureDocumentExtractor(BaseExtractor):
     """Extract text from an image using Azure Document Intelligence."""
 
     def __init__(self) -> None:
-        """Initialise the Azure Document Intelligence client.
+        """
+        Initialise the Azure Document Intelligence client.
 
         Provide the endpoint and API key as environment variables.
         """
