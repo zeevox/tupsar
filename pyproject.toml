@@ -20,10 +20,12 @@ dependencies = [
     "pyright>=1.1.393",
     "scikit-image>=0.25.1",
     "ijson>=3.3.0",
+    "langchain-core>=0.3.34rc1",
+    "langchain-anthropic>=0.3.5",
 ]
 
 [project.scripts]
-tupsar = "tupsar:main"
+tupsar = "tupsar:cli"
 
 [build-system]
 requires = ["hatchling"]

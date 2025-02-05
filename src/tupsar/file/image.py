@@ -1,5 +1,6 @@
 """Utility functions for processing images."""
 
+import base64
 import io
 from pathlib import Path
 
@@ -15,6 +16,18 @@ def get_image_bytes(image: Image) -> bytes:
     buffer = io.BytesIO()
     image.save(buffer, format=image.format)
     return buffer.getvalue()
+
+
+def pillow_image_to_base64_string(img: Image) -> str:
+    """
+    Convert a PIL Image to a base64-encoded JPEG data URL.
+
+    From https://stackoverflow.com/a/68989496/8459583
+    """
+    buffered = io.BytesIO()
+    img.save(buffered, format="JPEG")
+    encoded_image = base64.b64encode(buffered.getvalue()).decode("utf-8")
+    return f"data:image/jpeg;base64,{encoded_image}"
 
 
 def open_image(file_path: Path) -> ImageFile:

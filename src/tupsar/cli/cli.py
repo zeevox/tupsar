@@ -1,55 +1,53 @@
 """The `tupsar` command-line interface."""
 
 import argparse
+import asyncio
+import dataclasses
+import hashlib
+import json
 import logging
+from collections.abc import Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
 from PIL.ImageFile import ImageFile
 from rich.logging import RichHandler
-from rich.progress import track
 from rich_argparse import RichHelpFormatter
 
+from tupsar.extractor import BaseExtractor
 from tupsar.extractor.azure import AzureDocumentExtractor
 from tupsar.extractor.gemini import GeminiExtractor
-from tupsar.file.image import binarize_image, open_image
+from tupsar.extractor.langchain import LangChainExtractor
+from tupsar.file.image import open_image
 from tupsar.file.mime import FileType
 from tupsar.file.pdf import process_pdf
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-
-    from tupsar.model.article import Article
 
 logger = logging.getLogger("tupsar")
 
 
-def _process_files(file_paths: list[Path]) -> list[ImageFile]:
-    processed_images: list[ImageFile] = []
+def _process_files(file_paths: list[Path]) -> Iterator[ImageFile]:
     for path in file_paths:
         try:
             match FileType.of(path):
                 case FileType.IMAGE:
-                    img = open_image(path)
-                    processed_images.append(img)
+                    yield open_image(path)
                 case FileType.PDF:
-                    pages = process_pdf(path)
-                    processed_images.extend(pages)
+                    yield from process_pdf(path)
         except ValueError:
             logger.exception("Could not process %s", path)
-    return processed_images
 
 
-def main() -> None:
+extractors = {
+    "azure": AzureDocumentExtractor,
+    "gemini": GeminiExtractor,
+    "langchain": LangChainExtractor,
+}
+
+
+def cli() -> None:
     """Handle the tupsar command-line interface."""
     if not load_dotenv():
         logger.warning("No .env file containing API keys found")
-
-    extractors = {
-        "azure": AzureDocumentExtractor,
-        "gemini": GeminiExtractor,
-    }
 
     # Set up argument parser
     parser = argparse.ArgumentParser(formatter_class=RichHelpFormatter)
@@ -80,20 +78,8 @@ def main() -> None:
         "-e",
         "--extractor",
         choices=extractors.keys(),
-        default="gemini",
+        default="langchain",
         help="Extractor to use",
-    )
-    parser.add_argument(
-        "--binarize",
-        action="store_true",
-        help="Binarize images before processing",
-        default=False,
-    )
-    parser.add_argument(
-        "--skip-first",
-        dest="start_from",
-        type=int,
-        help="Skip the first N pages",
     )
     args = parser.parse_args()
 
@@ -111,27 +97,17 @@ def main() -> None:
         handlers=[RichHandler(rich_tracebacks=True)],
     )
 
-    inputs: list[Path] = args.inputs
-    pages: list[ImageFile] = _process_files(inputs)
+    asyncio.run(main(args.inputs, args.output_path, extractors[args.extractor]()))
 
-    if args.start_from and args.start_from > len(pages):
-        logger.error("Cannot skip more pages than there are")
-        return
 
-    output_path: Path = args.output_path
-    extractor = extractors[args.extractor]()
+async def main(inputs: list[Path], output_path: Path, extractor: BaseExtractor) -> None:
+    """Run the main program entry-point."""
+    pages: Iterator[ImageFile] = _process_files(inputs)
+    output_path.mkdir(parents=True, exist_ok=True)
 
-    for page_no, page in enumerate(track(pages, description="Processing pages")):
-        if args.start_from and page_no < args.start_from:
-            continue
-
-        articles: Iterator[Article] = extractor.extract(
-            binarize_image(page) if args.binarize else page,
-        )
-
-        page_dir = output_path / f"{page_no + 1:03d}"
-        page_dir.mkdir(exist_ok=True, parents=True)
-
-        for idx, article in enumerate(articles):
-            filename = f"{idx + 1:03d}_{article.slug}.md"
-            article.write_out(page_dir / filename)
+    async for article in extractor.extract_all(pages):
+        article_hash = hashlib.sha256(
+            json.dumps(dataclasses.asdict(article), sort_keys=True).encode("utf-8")
+        ).hexdigest()[:8]
+        filename = f"{article.slug}_{article_hash}.md"
+        article.write_out(output_path / filename)
