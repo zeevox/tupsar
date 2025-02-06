@@ -32,7 +32,11 @@ class Article:
             "slug": self.slug,
         }
 
-        frontmatter = yaml.dump({k: v for k, v in article_meta.items() if v})
+        frontmatter = yaml.dump(
+            {k: v for k, v in article_meta.items() if v},
+            allow_unicode=True,
+            width=float("inf"),
+        )
         with output_path.open("w") as f:
             f.write(f"---\n{frontmatter}---\n\n{self.text_body}")
 

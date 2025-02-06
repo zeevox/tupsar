@@ -22,6 +22,7 @@ dependencies = [
     "ijson>=3.3.0",
     "langchain-core>=0.3.34rc1",
     "langchain-anthropic>=0.3.5",
+    "langchain-google-genai>=2.0.9",
 ]
 
 [project.scripts]
@@ -42,6 +43,9 @@ dev = [
 
 [tool.uv]
 prerelease = "allow"
+
+[tool.ruff.format]
+preview = true
 
 [tool.ruff.lint]
 preview = true

@@ -189,6 +189,15 @@ wheels = [
 ]
 
 [[package]]
+name = "filetype"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/bb/29/745f7d30d47fe0f251d3ad3dc2978a23141917661998763bebb6da007eb1/filetype-1.2.0.tar.gz", hash = "sha256:66b56cd6474bf41d8c54660347d37afcc3f7d1970648de365c102ef77548aadb", size = 998020 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/18/79/1b8fa1bb3568781e84c9200f951c735f3f157429f44be0495da55894d620/filetype-1.2.0-py2.py3-none-any.whl", hash = "sha256:7ce71b6880181241cf7ac8697a2f1eb6a8bd9b429f7ad6d27b8db9ba5f1c2d25", size = 19970 },
+]
+
+[[package]]
 name = "google-ai-generativelanguage"
 version = "0.6.15"
 source = { registry = "https://pypi.org/simple" }
@@ -499,6 +508,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/71/89/22ad43a1d87b3321834fa0672a56607482071036509654bd9777b0bb52fe/langchain_core-0.3.34rc1.tar.gz", hash = "sha256:72fd43d9f48ceceb8645db2e45a78c3d25ed06aca0b01476e5ff4e665c23b4be", size = 524710 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/96/40/0a257d460d5f7f35ca24188114fc846666de7106483622bc589b8c2d0b90/langchain_core-0.3.34rc1-py3-none-any.whl", hash = "sha256:b668942ac1d76ec5285c5294185580374880c3dc981cc321ed53f963dd1cc03b", size = 412868 },
+]
+
+[[package]]
+name = "langchain-google-genai"
+version = "2.0.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "filetype" },
+    { name = "google-generativeai" },
+    { name = "langchain-core" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fb/1f/2a275165ba5a455147472682db71ca4cc45e414cfb37c1245efe283d4f43/langchain_google_genai-2.0.9.tar.gz", hash = "sha256:65205089da1f72688a0ed6e7c6914af308b6514ab8038fd8126ecb20f1df234c", size = 37437 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c2/6a/b6cbd72b820d31cf35fe677cc844220aa82a09b92167d43ade815acdec4d/langchain_google_genai-2.0.9-py3-none-any.whl", hash = "sha256:48d8c78c42048d54f40dff333db9d359746644e0feb0e08b5eabdf34ad7149ca", size = 41698 },
 ]
 
 [[package]]
@@ -1082,6 +1106,7 @@ dependencies = [
     { name = "ijson" },
     { name = "langchain-anthropic" },
     { name = "langchain-core" },
+    { name = "langchain-google-genai" },
     { name = "pillow" },
     { name = "pymupdf" },
     { name = "pyright" },
@@ -1109,6 +1134,7 @@ requires-dist = [
     { name = "ijson", specifier = ">=3.3.0" },
     { name = "langchain-anthropic", specifier = ">=0.3.5" },
     { name = "langchain-core", specifier = ">=0.3.34rc1" },
+    { name = "langchain-google-genai", specifier = ">=2.0.9" },
     { name = "pillow", specifier = ">=11.1.0" },
     { name = "pymupdf", specifier = ">=1.25.2" },
     { name = "pyright", specifier = ">=1.1.393" },

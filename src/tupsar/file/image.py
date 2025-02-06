@@ -18,16 +18,20 @@ def get_image_bytes(image: Image) -> bytes:
     return buffer.getvalue()
 
 
-def pillow_image_to_base64_string(img: Image) -> str:
+def pillow_image_to_base64_url(img: Image) -> str:
     """
     Convert a PIL Image to a base64-encoded JPEG data URL.
 
     From https://stackoverflow.com/a/68989496/8459583
     """
+    return f"data:image/jpeg;base64,{pillow_image_to_base64_string(img)}"
+
+
+def pillow_image_to_base64_string(img: Image) -> str:
+    """Encode a PIL image in base64."""
     buffered = io.BytesIO()
     img.save(buffered, format="JPEG")
-    encoded_image = base64.b64encode(buffered.getvalue()).decode("utf-8")
-    return f"data:image/jpeg;base64,{encoded_image}"
+    return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 
 def open_image(file_path: Path) -> ImageFile:
