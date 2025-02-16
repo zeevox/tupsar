@@ -17,6 +17,7 @@ class Article:
     text_body: str
     strapline: str | None = None
     author_name: str | None = None
+    category: str | None = None
 
     @property
     def slug(self) -> str:
@@ -30,6 +31,7 @@ class Article:
             "subtitle": self.strapline,
             "author": self.author_name,
             "slug": self.slug,
+            "category": self.category,
         }
 
         frontmatter = yaml.dump(

@@ -32,6 +32,7 @@ SYSTEM_PROMPT = (
     "  b. strapline: the subhead or dek, if specified.\n"
     "  c. author_name\n"
     "  d. text_body: the article contents, in Markdown format (required)\n"
+    "  e. category: the section of the newspaper to which the article belongs.\n"
     "For each article, please reflow the text_body into coherent paragraphs. "
     "Ensure the transcription is as accurate as possible. "
     "Preserve original punctuation, capitalisation, and formatting. "
@@ -61,6 +62,9 @@ class _ResponseArticle(BaseModel):
     strapline: str | None = Field(None, description="AKA subhead or dek, if present")
     author_name: str | None = Field(None, description="Who wrote the article")
     text_body: str = Field(..., description="Text of the article, in Markdown")
+    category: str | None = Field(
+        None, description="The section of the newspaper to which the article belongs"
+    )
 
     def to_article(self) -> Article:
         return Article(
@@ -68,6 +72,7 @@ class _ResponseArticle(BaseModel):
             text_body=self.text_body,
             strapline=self.strapline,
             author_name=self.author_name,
+            category=self.category,
         )
 
 
@@ -174,4 +179,5 @@ class LangChainExtractor(BaseExtractor):
                     text_body=article.get("text_body") or "[Empty article]",
                     strapline=article.get("strapline"),
                     author_name=article.get("author_name"),
+                    category=article.get("category"),
                 )
