@@ -1,9 +1,9 @@
 """Extractor implementation using LangChain."""
 
 import asyncio
+import enum
 import logging
 from collections.abc import AsyncIterator, Iterator
-from enum import StrEnum
 from typing import Final
 
 from langchain_anthropic import ChatAnthropic
@@ -83,18 +83,18 @@ class _ResponseArticleList(BaseModel):
 class LangChainExtractor(BaseExtractor):
     """Extract text from images using the LangChain library."""
 
-    class Model(StrEnum):
+    class Model(enum.StrEnum):
         """Supported large language models."""
 
-        GEMINI = "gemini-1.5-flash-002"
-        CLAUDE = "claude-3-5-sonnet-20241022"
+        GEMINI = enum.auto()
+        CLAUDE = enum.auto()
 
         def construct_model(self) -> BaseChatModel:
             """Return an instance of the corresponding LangChain model."""
             match self:
                 case self.CLAUDE:
                     return ChatAnthropic(
-                        model_name=self,
+                        model_name="claude-3-5-sonnet-20241022",
                         temperature=0,
                         max_tokens_to_sample=4096,
                         timeout=None,
@@ -107,7 +107,7 @@ class LangChainExtractor(BaseExtractor):
 
                 case self.GEMINI:
                     return ChatGoogleGenerativeAI(
-                        model="gemini-1.5-flash-002",
+                        model="gemini-2.0-flash-001",
                         temperature=0,
                         max_tokens=4096,
                         timeout=None,
