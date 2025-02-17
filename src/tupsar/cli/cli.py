@@ -1,7 +1,6 @@
 """The `tupsar` command-line interface."""
 
 import argparse
-import asyncio
 import dataclasses
 import hashlib
 import json
@@ -98,19 +97,17 @@ def cli() -> None:
         handlers=[RichHandler(rich_tracebacks=True)],
     )
 
-    asyncio.run(
-        main(
-            args.inputs,
-            args.output_path,
-            LangChainExtractor(
-                LangChainExtractor.Model.GEMINI,
-                LangChainExtractor.Model.CLAUDE,
-            ),
-        )
+    main(
+        args.inputs,
+        args.output_path,
+        LangChainExtractor(
+            LangChainExtractor.Model.GEMINI,
+            LangChainExtractor.Model.CLAUDE,
+        ),
     )
 
 
-async def main(inputs: list[Path], output_path: Path, extractor: BaseExtractor) -> None:
+def main(inputs: list[Path], output_path: Path, extractor: BaseExtractor) -> None:
     """Run the main program entry-point."""
     pages: Iterator[ImageFile] = _process_files(inputs)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -118,12 +115,10 @@ async def main(inputs: list[Path], output_path: Path, extractor: BaseExtractor) 
     console = Console()
 
     with console.status("[bold green]Extracting articles...") as status:
-        counter = 0
-        async for article in extractor.extract_all(pages):
+        for counter, article in enumerate(extractor.extract_all(pages)):
             article_hash = hashlib.sha256(
                 json.dumps(dataclasses.asdict(article), sort_keys=True).encode("utf-8")
             ).hexdigest()[:8]
             filename = f"{article.slug}_{article_hash}.md"
             article.write_out(output_path / filename)
-            counter += 1
-            status.update(f"Extracted {counter} articles")
+            status.update(f"Extracted {counter + 1} articles")

@@ -1,9 +1,8 @@
 """Extractor implementation using LangChain."""
 
-import asyncio
 import enum
 import logging
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import Iterator
 from typing import Final
 
 from langchain_anthropic import ChatAnthropic
@@ -152,21 +151,20 @@ class LangChainExtractor(BaseExtractor):
             ])
         )
 
-    async def extract_all(self, pages: Iterator[Image]) -> AsyncIterator[Article]:
+    def extract_all(self, pages: Iterator[Image]) -> Iterator[Article]:
         """Extract all the articles from the provided pages."""
 
-        async def process(page: Image) -> Output | Exception:
+        def process(page: Image) -> Output | Exception:
             try:
                 page.thumbnail(self.Model.GEMINI.max_image_input_size)
-                return await self.model.ainvoke({
+                return self.model.invoke({
                     "image_data": pillow_image_to_base64_string(page)
                 })
             except Exception as e:
                 self.logger.exception("One of the pages failed")
                 return e
 
-        for coro in asyncio.as_completed(map(process, pages)):
-            response: dict = await coro
+        for response in map(process, pages):
             self.logger.debug(response)
 
             for article in response:
