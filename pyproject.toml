@@ -39,10 +39,13 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "matplotlib>=3.10.0",
     "mypy>=1.15.0",
+    "notebook>=7.4.0a3",
     "pre-commit>=4.1.0",
     "pyright>=1.1.394",
     "ruff>=0.9.6",
+    "seaborn>=0.13.2",
     "types-pyyaml>=6.0.12.20241230",
 ]
 
