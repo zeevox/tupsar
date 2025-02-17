@@ -1,13 +1,12 @@
 """The `tupsar` command-line interface."""
 
 import argparse
-import dataclasses
-import hashlib
-import json
+import asyncio
 import logging
 from collections.abc import Iterator
 from pathlib import Path
 
+import asyncstdlib as a
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.logging import RichHandler
@@ -99,17 +98,19 @@ def cli() -> None:
         handlers=[RichHandler(rich_tracebacks=True)],
     )
 
-    main(
-        args.inputs,
-        args.output_path,
-        LangChainExtractor(
-            LangChainExtractor.Model.GEMINI,
-            LangChainExtractor.Model.CLAUDE,
-        ),
+    asyncio.run(
+        main(
+            args.inputs,
+            args.output_path,
+            LangChainExtractor(
+                LangChainExtractor.Model.GEMINI,
+                LangChainExtractor.Model.CLAUDE,
+            ),
+        )
     )
 
 
-def main(inputs: list[Path], output_path: Path, extractor: BaseExtractor) -> None:
+async def main(inputs: list[Path], output_path: Path, extractor: BaseExtractor) -> None:
     """Run the main program entry-point."""
     pages: Iterator[Page] = _process_files(inputs)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -117,10 +118,7 @@ def main(inputs: list[Path], output_path: Path, extractor: BaseExtractor) -> Non
     console = Console()
 
     with console.status("[bold green]Extracting articles...") as status:
-        for counter, article in enumerate(extractor.extract_all(pages)):
-            article_hash = hashlib.sha256(
-                json.dumps(dataclasses.asdict(article), sort_keys=True).encode("utf-8")
-            ).hexdigest()[:8]
+        async for counter, article in a.enumerate(extractor.extract_all(pages)):
             output_file = unique_path(
                 output_path / f"{article.issue}-{article.page_no:03d}_{article.slug}.md"
             )
