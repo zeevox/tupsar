@@ -8,8 +8,10 @@ import fitz
 from PIL import Image
 from PIL.ImageFile import ImageFile
 
+from tupsar.model.page import Page
 
-def get_pdf_pages(pdf_path: str) -> Iterator[ImageFile]:
+
+def get_pdf_pages(pdf_path: str | Path) -> Iterator[ImageFile]:
     """Load the pages of a scanned document one-by-one."""
     with fitz.open(pdf_path) as doc:
         for page_no in range(doc.page_count):
@@ -20,6 +22,7 @@ def get_pdf_pages(pdf_path: str) -> Iterator[ImageFile]:
                 yield Image.open(io.BytesIO(base_image["image"]))
 
 
-def process_pdf(file_path: Path) -> list[ImageFile]:
+def process_pdf(file_path: Path) -> Iterator[Page]:
     """Load a PDF as a list of images."""
-    return list(get_pdf_pages(str(file_path)))
+    for page_no, image in enumerate(get_pdf_pages(file_path)):
+        yield Page(file_path.stem, page_no, image)

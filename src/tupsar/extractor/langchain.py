@@ -13,12 +13,12 @@ from langchain_core.rate_limiters import InMemoryRateLimiter
 from langchain_core.runnables import Runnable
 from langchain_core.runnables.utils import Output
 from langchain_google_genai import ChatGoogleGenerativeAI
-from PIL.Image import Image
 from pydantic import BaseModel, Field
 
 from tupsar.extractor import BaseExtractor
 from tupsar.file.image import pillow_image_to_base64_string
 from tupsar.model.article import Article
+from tupsar.model.page import Page
 
 SYSTEM_PROMPT = (
     "You are an expert typist transcribing articles from "
@@ -151,20 +151,20 @@ class LangChainExtractor(BaseExtractor):
             ])
         )
 
-    def extract_all(self, pages: Iterator[Image]) -> Iterator[Article]:
+    def extract_all(self, pages: Iterator[Page]) -> Iterator[Article]:
         """Extract all the articles from the provided pages."""
 
-        def process(page: Image) -> Output | Exception:
+        def process(input_page: Page) -> Output | Exception:
             try:
-                page.thumbnail(self.Model.GEMINI.max_image_input_size)
+                input_page.image.thumbnail(self.Model.GEMINI.max_image_input_size)
                 return self.model.invoke({
-                    "image_data": pillow_image_to_base64_string(page)
+                    "image_data": pillow_image_to_base64_string(input_page.image)
                 })
             except Exception as e:
                 self.logger.exception("One of the pages failed")
                 return e
 
-        for response in map(process, pages):
+        for page, response in ((p, process(p)) for p in pages):
             self.logger.debug(response)
 
             for article in response:
@@ -173,6 +173,8 @@ class LangChainExtractor(BaseExtractor):
                     continue
 
                 yield Article(
+                    issue=page.issue,
+                    page_no=page.page_no,
                     headline=article.get("headline") or "Untitled",
                     text_body=article.get("text_body") or "[Empty article]",
                     strapline=article.get("strapline"),
