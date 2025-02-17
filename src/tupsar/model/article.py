@@ -6,8 +6,6 @@ import re
 import textwrap
 import unicodedata
 
-import yaml
-
 
 @dataclasses.dataclass(frozen=True)
 class Article:
@@ -38,13 +36,21 @@ class Article:
             "page_no": self.page_no,
         }
 
-        frontmatter = yaml.dump(
-            {k: v for k, v in article_meta.items() if v},
-            allow_unicode=True,
-            width=float("inf"),
+        meta_tags = "\n    ".join(
+            f'<meta name="{k}" content="{v}">' for k, v in article_meta.items() if v
         )
-        with output_path.open("w") as f:
-            f.write(f"---\n{frontmatter}---\n\n{self.text_body}")
+        html = f"""<!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="utf-8">
+          {meta_tags}
+        </head>
+        <body>
+          {self.text_body}
+        </body>
+        </html>
+        """
+        output_path.write_text(html, encoding="utf-8")
 
 
 def slugify(text: str) -> str:

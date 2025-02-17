@@ -120,7 +120,8 @@ async def main(inputs: list[Path], output_path: Path, extractor: BaseExtractor) 
     with console.status("[bold green]Extracting articles...") as status:
         async for counter, article in a.enumerate(extractor.extract_all(pages)):
             output_file = unique_path(
-                output_path / f"{article.issue}-{article.page_no:03d}_{article.slug}.md"
+                output_path
+                / f"{article.issue}-{article.page_no:03d}_{article.slug}.html"
             )
             article.write_out(output_file)
             status.update(f"Extracted {counter + 1} articles")

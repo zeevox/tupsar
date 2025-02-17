@@ -3,12 +3,14 @@
 import asyncio
 import enum
 import logging
+import re
 from collections.abc import AsyncIterator, Iterator
 from typing import Final
 
+import bs4
+from bs4 import Tag
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
-from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.rate_limiters import InMemoryRateLimiter
 from langchain_core.runnables import Runnable
@@ -24,14 +26,14 @@ from tupsar.model.page import Page
 SYSTEM_PROMPT = (
     "You are an expert typist transcribing articles from "
     "archival scans of Felix, the Imperial College London student newspaper. "
-    "Structure your response as a JSON array of articles. "
-    "Use Markdown headings and formatting to structure complex articles, "
+    "Structure your response as a set of XML articles. "
+    "Use HTML headings and formatting to structure complex articles, "
     "rather than splitting them up. "
-    "For each article you identify, create a JSON object with these fields:\n"
+    "For each article you identify, create an XML object with these fields:\n"
     "  a. headline: article headline (required)\n"
     "  b. strapline: the subhead or dek, if specified.\n"
     "  c. author_name\n"
-    "  d. text_body: the article contents, in Markdown format (required)\n"
+    "  d. text_body: the article contents, in HTML format (required)\n"
     "  e. category: the section of the newspaper to which the article belongs.\n"
     "For each article, please reflow the text_body into coherent paragraphs. "
     "Ensure the transcription is as accurate as possible. "
@@ -122,11 +124,7 @@ class LangChainExtractor(BaseExtractor):
 
         def construct_chain(self) -> Runnable:
             """Return an instance of the full corresponding extraction pipeline."""
-            return (
-                PROMPT_TEMPLATE
-                | self.construct_model()
-                | JsonOutputParser(pydantic_object=_ResponseArticleList)
-            )
+            return PROMPT_TEMPLATE | self.construct_model()
 
         @property
         def max_image_input_size(self) -> tuple[int, int]:
@@ -171,17 +169,42 @@ class LangChainExtractor(BaseExtractor):
             page, response = await coro
             self.logger.debug(response)
 
-            for article in response:
-                if not isinstance(article, dict):
-                    self.logger.error("Got unexpected article response: %s", article)
-                    continue
-
+            soup = bs4.BeautifulSoup(_get_llm_xml(response.content), "lxml-xml")
+            for article in soup.find_all("article"):
                 yield Article(
                     issue=page.issue,
                     page_no=page.page_no,
-                    headline=article.get("headline") or "Untitled",
-                    text_body=article.get("text_body") or "[Empty article]",
-                    strapline=article.get("strapline"),
-                    author_name=article.get("author_name"),
-                    category=article.get("category"),
+                    headline=_get_text(article, "headline", "Untitled"),
+                    text_body=article.find("text_body").prettify(formatter=formatter),
+                    strapline=_get_text(article, "strapline"),
+                    author_name=_get_text(article, "author_name"),
+                    category=_get_text(article, "category"),
                 )
+
+
+formatter = bs4.formatter.HTMLFormatter(indent=0)
+
+
+def _get_text(tree: Tag, query: str, default: str | None = None) -> str | None:
+    element = tree.find(query)
+    if element is not None:
+        return element.get_text(strip=True)
+    return default
+
+
+encoding_matcher: re.Pattern = re.compile(
+    r"<([^>]*encoding[^>]*)>\n(.*)", re.MULTILINE | re.DOTALL
+)
+
+
+def _get_llm_xml(text: str) -> str:
+    # From https://github.com/langchain-ai/langchain/blob/037b129b86eaf0ba077b406bfa81fb4059d35874/libs/core/langchain_core/output_parsers/xml.py#L219-L227
+    match = re.search(r"```(xml)?(.*)```", text, re.DOTALL)
+    if match is not None:
+        # If match found, use the content within the backticks
+        text = match.group(2)
+    encoding_match = encoding_matcher.search(text)
+    if encoding_match:
+        text = encoding_match.group(2)
+
+    return text.strip()
