@@ -20,6 +20,7 @@ class Article:
     strapline: str | None = None
     author_name: str | None = None
     category: str | None = None
+    continued_from: str | None = None
 
     @property
     def slug(self) -> str:
@@ -36,6 +37,7 @@ class Article:
             "category": self.category,
             "issue": self.issue,
             "page_no": self.page_no,
+            "continued_from": self.continued_from,
         }
 
         frontmatter = yaml.dump(

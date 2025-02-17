@@ -26,15 +26,19 @@ SYSTEM_PROMPT = (
     "Structure your response as a JSON array of articles. "
     "Use Markdown headings and formatting to structure complex articles, "
     "rather than splitting them up. "
+    "Some articles may be continued from a previous page."
+    "Previous articles in this issue:\n* {articles}\n"
     "For each article you identify, create a JSON object with these fields:\n"
-    "  a. headline: article headline (required)\n"
-    "  b. strapline: the subhead or dek, if specified.\n"
-    "  c. author_name\n"
-    "  d. text_body: the article contents, in Markdown format (required)\n"
-    "  e. category: the section of the newspaper to which the article belongs.\n"
+    "  a. continued_from: bool, whether this is a continuation of a previous article"
+    "  b. continued_from_headline: headline of the article from which this one continues (if it does)"
+    "  c. headline: article headline (required)\n"
+    "  d. strapline: the subhead or dek, if specified.\n"
+    "  e. author_name\n"
+    "  f. text_body: the article contents, in Markdown format (required)\n"
+    "  g. category: the section of the newspaper to which the article belongs.\n"
     "For each article, please reflow the text_body into coherent paragraphs. "
     "Ensure the transcription is as accurate as possible. "
-    "Preserve original punctuation, capitalisation, and formatting. "
+    "Preserve original punctuation, capitalisation, and formatting."
 )
 USER_PROMPT = (
     "Process the entire newspaper scan and structure all articles in this format. "
@@ -154,30 +158,41 @@ class LangChainExtractor(BaseExtractor):
     def extract_all(self, pages: Iterator[Page]) -> Iterator[Article]:
         """Extract all the articles from the provided pages."""
 
-        def process(input_page: Page) -> Output | Exception:
+        def process(input_page: Page, history: list[str]) -> Output | Exception:
             try:
                 input_page.image.thumbnail(self.Model.GEMINI.max_image_input_size)
                 return self.model.invoke({
-                    "image_data": pillow_image_to_base64_string(input_page.image)
+                    "articles": "\n* ".join(history),
+                    "image_data": pillow_image_to_base64_string(input_page.image),
                 })
             except Exception as e:
                 self.logger.exception("One of the pages failed")
                 return e
 
-        for page, response in ((p, process(p)) for p in pages):
+        prev_articles: list[str] = []
+
+        for page in pages:
+            response = process(page, prev_articles)
             self.logger.debug(response)
 
-            for article in response:
-                if not isinstance(article, dict):
-                    self.logger.error("Got unexpected article response: %s", article)
+            for entry in response:
+                if not isinstance(entry, dict):
+                    self.logger.error("Got unexpected article response: %s", entry)
                     continue
+
+                headline = entry.get("headline")
+                text_body = entry.get("text_body")
+
+                if headline and text_body:
+                    prev_articles.append(f"{headline} (Ended with: {text_body[-30:]})")
 
                 yield Article(
                     issue=page.issue,
                     page_no=page.page_no,
-                    headline=article.get("headline") or "Untitled",
-                    text_body=article.get("text_body") or "[Empty article]",
-                    strapline=article.get("strapline"),
-                    author_name=article.get("author_name"),
-                    category=article.get("category"),
+                    headline=headline or "Untitled",
+                    text_body=entry.get("text_body") or "[Empty article]",
+                    strapline=entry.get("strapline"),
+                    author_name=entry.get("author_name"),
+                    category=entry.get("category"),
+                    continued_from=entry.get("continued_from_headline"),
                 )
