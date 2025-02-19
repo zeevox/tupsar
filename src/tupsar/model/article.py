@@ -6,6 +6,10 @@ import re
 import textwrap
 import unicodedata
 
+import bs4
+
+formatter = bs4.formatter.HTMLFormatter(indent=0)
+
 
 @dataclasses.dataclass(frozen=True)
 class Article:
@@ -14,7 +18,7 @@ class Article:
     issue: str
     page_no: int
     headline: str
-    text_body: str
+    text_body: bs4.Tag
     strapline: str | None = None
     author_name: str | None = None
     category: str | None = None
@@ -36,21 +40,31 @@ class Article:
             "page_no": self.page_no,
         }
 
-        meta_tags = "\n    ".join(
-            f'<meta name="{k}" content="{v}">' for k, v in article_meta.items() if v
-        )
-        html = f"""<!DOCTYPE html>
-        <html lang="en">
-        <head>
-          <meta charset="utf-8">
-          {meta_tags}
-        </head>
-        <body>
-          {self.text_body}
-        </body>
-        </html>
-        """
-        output_path.write_text(html, encoding="utf-8")
+        # Create bs4 tags for each metadata
+        meta_tags = []
+        for key, value in article_meta.items():
+            if value is None:
+                continue
+
+            meta_tags.append(
+                bs4.Tag(name="meta", attrs={"name": key, "content": value})
+            )
+
+        # Package them up into the <head>
+        head = bs4.Tag(name="head")
+        head.extend(meta_tags)
+
+        # Create a bs4 tag for the article body
+        article_body = bs4.Tag(name="body")
+        if self.text_body:
+            article_body.append(self.text_body)
+
+        # Create a bs4 tag for the entire article
+        html = bs4.Tag(name="html")
+        html.append(head)
+        html.append(article_body)
+
+        output_path.write_text(html.prettify(formatter=formatter), encoding="utf-8")
 
 
 def slugify(text: str) -> str:

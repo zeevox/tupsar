@@ -26,23 +26,20 @@ from tupsar.model.page import Page
 SYSTEM_PROMPT = (
     "You are an expert typist transcribing articles from "
     "archival scans of Felix, the Imperial College London student newspaper. "
-    "Structure your response as a set of XML articles. "
-    "Use HTML headings and formatting to structure complex articles, "
+    "Structure your response as a set of HTML articles. "
+    "Use HTML heading and formatting tags to structure complex articles, "
     "rather than splitting them up. "
-    "For each article you identify, create an XML object with these fields:\n"
-    "  a. headline: article headline (required)\n"
-    "  b. strapline: the subhead or dek, if specified.\n"
-    "  c. author_name\n"
-    "  d. text_body: the article contents, in HTML format (required)\n"
-    "  e. category: the section of the newspaper to which the article belongs.\n"
+    "For each article you identify, add the following to the `<header>`:\n"
+    "  a. <headline>: article headline (required)\n"
+    "  b. <strapline>: the subhead or dek, if specified.\n"
+    "  c. <author_name>\n"
+    "  d. <category>: the section of the newspaper to which the article belongs.\n"
+    "Then in the `<main>`,  write the article contents, in HTML format. "
     "For each article, please reflow the text_body into coherent paragraphs. "
     "Ensure the transcription is as accurate as possible. "
     "Preserve original punctuation, capitalisation, and formatting. "
 )
-USER_PROMPT = (
-    "Process the entire newspaper scan and structure all articles in this format. "
-    "Begin the task now."
-)
+USER_PROMPT = "Process the entire newspaper scan. Begin the task now."
 
 PROMPT_TEMPLATE: Final[ChatPromptTemplate] = ChatPromptTemplate.from_messages([
     ("system", SYSTEM_PROMPT),
@@ -170,19 +167,19 @@ class LangChainExtractor(BaseExtractor):
             self.logger.debug(response)
 
             soup = bs4.BeautifulSoup(_get_llm_xml(response.content), "lxml-xml")
-            for article in soup.find_all("article"):
+            articles = soup.find_all("article")
+            if not articles:
+                self.logger.warning("No articles returned?")
+            for article in articles:
                 yield Article(
                     issue=page.issue,
                     page_no=page.page_no,
                     headline=_get_text(article, "headline", "Untitled"),
-                    text_body=article.find("text_body").prettify(formatter=formatter),
+                    text_body=article.find("main"),
                     strapline=_get_text(article, "strapline"),
                     author_name=_get_text(article, "author_name"),
                     category=_get_text(article, "category"),
                 )
-
-
-formatter = bs4.formatter.HTMLFormatter(indent=0)
 
 
 def _get_text(tree: Tag, query: str, default: str | None = None) -> str | None:
@@ -199,7 +196,7 @@ encoding_matcher: re.Pattern = re.compile(
 
 def _get_llm_xml(text: str) -> str:
     # From https://github.com/langchain-ai/langchain/blob/037b129b86eaf0ba077b406bfa81fb4059d35874/libs/core/langchain_core/output_parsers/xml.py#L219-L227
-    match = re.search(r"```(xml)?(.*)```", text, re.DOTALL)
+    match = re.search(r"```(html|xml)?(.*)```", text, re.DOTALL)
     if match is not None:
         # If match found, use the content within the backticks
         text = match.group(2)
@@ -207,4 +204,4 @@ def _get_llm_xml(text: str) -> str:
     if encoding_match:
         text = encoding_match.group(2)
 
-    return text.strip()
+    return f"<html>{text.strip()}</html>"
