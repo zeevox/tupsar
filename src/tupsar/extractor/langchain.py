@@ -26,18 +26,19 @@ from tupsar.model.page import Page
 SYSTEM_PROMPT = (
     "You are an expert typist transcribing articles from "
     "archival scans of Felix, the Imperial College London student newspaper. "
-    "Structure your response as a set of HTML articles. "
-    "Use HTML heading and formatting tags to structure complex articles, "
-    "rather than splitting them up. "
-    "For each article you identify, add the following to the `<header>`:\n"
-    "  a. <headline>: article headline (required)\n"
+    "Structure your response as a set of one or more HTML articles. "
+    "Use HTML heading and formatting tags to structure complex articles. "
+    "Only start a new article when the context changes. "
+    "For each <article> you identify, add the following to the <header>\n"
+    "  a. <headline>: article headline\n"
     "  b. <strapline>: the subhead or dek, if specified.\n"
     "  c. <author_name>\n"
     "  d. <category>: the section of the newspaper to which the article belongs.\n"
-    "Then in the `<main>`,  write the article contents, in HTML format. "
-    "For each article, please reflow the text_body into coherent paragraphs. "
+    "Then in the <main> write the article contents in HTML format. "
+    "Please reflow each article into coherent paragraphs. "
     "Ensure the transcription is as accurate as possible. "
     "Preserve original punctuation, capitalisation, and formatting. "
+    "Ignore images and advertisements."
 )
 USER_PROMPT = "Process the entire newspaper scan. Begin the task now."
 
@@ -166,10 +167,41 @@ class LangChainExtractor(BaseExtractor):
             page, response = await coro
             self.logger.debug(response)
 
+            if isinstance(response, Exception):
+                self.logger.error(
+                    "Failed to extract text from %s page %d",
+                    page.issue,
+                    page.page_no,
+                )
+                continue
+
+            response_metadata: dict = response.response_metadata
+
+            if response_metadata.get("finish_reason") != "STOP":
+                self.logger.error(
+                    "Unexpected finish reason %s for article in %s page %d",
+                    response.response_metadata["finish_reason"],
+                    page.issue,
+                    page.page_no,
+                )
+                continue
+
+            feedback = response_metadata.get("prompt_feedback", {})
+            if feedback.get("block_reason") != 0:
+                self.logger.error(
+                    "Extraction blocked for %s page %d with code %d",
+                    page.issue,
+                    page.page_no,
+                    feedback["block_reason"],
+                )
+                continue
+
             soup = bs4.BeautifulSoup(_get_llm_xml(response.content), "lxml-xml")
             articles = soup.find_all("article")
             if not articles:
-                self.logger.warning("No articles returned?")
+                self.logger.warning(
+                    "No articles returned for %s page %s", page.issue, page.page_no
+                )
             for article in articles:
                 yield Article(
                     issue=page.issue,
