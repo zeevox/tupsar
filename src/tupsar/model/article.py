@@ -15,8 +15,6 @@ formatter = bs4.formatter.HTMLFormatter(indent=0)
 class Article:
     """A newspaper article."""
 
-    issue: str
-    page_no: int
     headline: str
     text_body: bs4.Tag
     strapline: str | None = None
@@ -36,8 +34,6 @@ class Article:
             "author": self.author_name,
             "slug": self.slug,
             "category": self.category,
-            "issue": self.issue,
-            "page_no": self.page_no,
         }
 
         # Create bs4 tags for each metadata

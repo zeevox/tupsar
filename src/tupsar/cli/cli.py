@@ -3,7 +3,7 @@
 import argparse
 import asyncio
 import logging
-from collections.abc import Iterator
+from logging import FileHandler
 from pathlib import Path
 
 import asyncstdlib as a
@@ -14,33 +14,12 @@ from rich_argparse import RichHelpFormatter
 
 from tupsar.extractor import BaseExtractor
 from tupsar.extractor.langchain import LangChainExtractor
-from tupsar.file.image import open_image
-from tupsar.file.mime import FileType
 from tupsar.file.path import unique_path
-from tupsar.file.pdf import process_pdf
-from tupsar.model.page import Page, parse_filename
 
 logger = logging.getLogger("tupsar")
 
 
-def _process_files(file_paths: list[Path]) -> Iterator[Page]:
-    for path in file_paths:
-        try:
-            match FileType.of(path):
-                case FileType.IMAGE:
-                    issue, page_no = parse_filename(path)
-                    yield Page(issue, page_no, open_image(path))
-                case FileType.PDF:
-                    yield from process_pdf(path)
-        except ValueError:
-            logger.exception("Could not process %s", path)
-
-
-extractors = {
-    "gemini-1.5": LangChainExtractor.Model.GEMINI_1_5,
-    "gemini-2.0": LangChainExtractor.Model.GEMINI_2_0,
-    "claude-3.5": LangChainExtractor.Model.CLAUDE_3_5,
-}
+console: Console = Console()
 
 
 def cli() -> None:
@@ -76,7 +55,7 @@ def cli() -> None:
     parser.add_argument(
         "-e",
         "--extractor",
-        choices=extractors.keys(),
+        choices=LangChainExtractor.Model,
         default="langchain",
         help="Extractor to use",
     )
@@ -93,30 +72,27 @@ def cli() -> None:
         ),
         format="%(message)s",
         datefmt="[%X]",
-        handlers=[RichHandler(rich_tracebacks=True)],
+        handlers=[
+            RichHandler(rich_tracebacks=True, console=console),
+            FileHandler("tupsar.log", encoding="utf-8"),
+        ],
     )
 
     asyncio.run(
         main(
             args.inputs,
             args.output_path,
-            LangChainExtractor(extractors[args.extractor]),
+            LangChainExtractor(args.extractor),
         )
     )
 
 
-async def main(inputs: list[Path], output_path: Path, extractor: BaseExtractor) -> None:
+async def main(pages: list[Path], output_path: Path, extractor: BaseExtractor) -> None:
     """Run the main program entry-point."""
-    pages: Iterator[Page] = _process_files(inputs)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    console = Console()
-
     with console.status("[bold green]Extracting articles...") as status:
-        async for counter, article in a.enumerate(extractor.extract_all(pages)):
-            output_file = unique_path(
-                output_path
-                / f"{article.issue}-{article.page_no:03d}_{article.slug}.html"
-            )
+        async for counter, (path, article) in a.enumerate(extractor.extract_all(pages)):
+            output_file = unique_path(output_path / f"{path.stem}_{article.slug}.html")
             article.write_out(output_file)
             status.update(f"Extracted {counter + 1} articles")

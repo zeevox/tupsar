@@ -62,3 +62,10 @@ def binarize_image(image: Image) -> Image:
     binary_image = ((image_np > threshold) * 255).astype(np.uint8)
 
     return PIL.Image.fromarray(binary_image)
+
+
+def parse_filename(file: Path) -> tuple[str, int]:
+    """Parse a Felix issue filename."""
+    # parse e.g. felix_1001-001 or felix-daily-2011_2-10
+    issue, page = file.stem.rsplit("-", 1)
+    return issue, int(page)

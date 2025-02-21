@@ -1,27 +1,31 @@
 """Extractor implementation using LangChain."""
 
-import asyncio
 import enum
 import logging
 import re
-from collections.abc import AsyncIterator, Iterator
-from typing import Final
+from collections.abc import AsyncIterator, Sequence
+from pathlib import Path
+from typing import TYPE_CHECKING, Final, override
 
 import bs4
 from bs4 import Tag
 from langchain_anthropic import ChatAnthropic
+from langchain_core.exceptions import OutputParserException
 from langchain_core.language_models import BaseChatModel
+from langchain_core.output_parsers import BaseGenerationOutputParser
+from langchain_core.outputs import ChatGeneration, Generation
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.rate_limiters import InMemoryRateLimiter
-from langchain_core.runnables import Runnable
-from langchain_core.runnables.utils import Output
+from langchain_core.runnables import Runnable, RunnableConfig, RunnableLambda
+from langchain_core.runnables.utils import Input
 from langchain_google_genai import ChatGoogleGenerativeAI
-from pydantic import BaseModel, Field
 
 from tupsar.extractor import BaseExtractor
-from tupsar.file.image import pillow_image_to_base64_string
+from tupsar.file.image import open_image, pillow_image_to_base64_string
 from tupsar.model.article import Article
-from tupsar.model.page import Page
+
+if TYPE_CHECKING:
+    from langchain_core.messages import BaseMessage
 
 SYSTEM_PROMPT = (
     "You are an expert typist transcribing articles from "
@@ -57,38 +61,16 @@ PROMPT_TEMPLATE: Final[ChatPromptTemplate] = ChatPromptTemplate.from_messages([
 ])
 
 
-class _ResponseArticle(BaseModel):
-    headline: str = Field(..., description="Article title")
-    strapline: str | None = Field(None, description="AKA subhead or dek, if present")
-    author_name: str | None = Field(None, description="Who wrote the article")
-    text_body: str = Field(..., description="Text of the article, in Markdown")
-    category: str | None = Field(
-        None, description="The section of the newspaper to which the article belongs"
-    )
-
-    def to_article(self) -> Article:
-        return Article(
-            headline=self.headline,
-            text_body=self.text_body,
-            strapline=self.strapline,
-            author_name=self.author_name,
-            category=self.category,
-        )
-
-
-class _ResponseArticleList(BaseModel):
-    articles: list[_ResponseArticle] = Field(..., description="List of articles")
-
-
 class LangChainExtractor(BaseExtractor):
     """Extract text from images using the LangChain library."""
 
     class Model(enum.StrEnum):
         """Supported large language models."""
 
-        GEMINI_1_5 = enum.auto()
-        GEMINI_2_0 = enum.auto()
-        CLAUDE_3_5 = enum.auto()
+        GEMINI_1_5 = "gemini-1.5"
+        GEMINI_1_5_PRO = "gemini-1.5-pro"
+        GEMINI_2_0 = "gemini-2.0"
+        CLAUDE_3_5 = "claude-3.5"
 
         def construct_model(self) -> BaseChatModel:
             """Return an instance of the corresponding LangChain model."""
@@ -97,7 +79,7 @@ class LangChainExtractor(BaseExtractor):
                     return ChatAnthropic(
                         model_name="claude-3-5-sonnet-20241022",
                         temperature=0,
-                        max_tokens_to_sample=4096,
+                        max_tokens_to_sample=8192,
                         timeout=None,
                         max_retries=0,
                         rate_limiter=InMemoryRateLimiter(
@@ -110,11 +92,24 @@ class LangChainExtractor(BaseExtractor):
                     return ChatGoogleGenerativeAI(
                         model="gemini-1.5-flash-002",
                         temperature=0,
-                        max_tokens=4096,
+                        max_tokens=8192,
                         timeout=None,
                         max_retries=1,
                         rate_limiter=InMemoryRateLimiter(
-                            requests_per_second=20,
+                            requests_per_second=30,
+                            max_bucket_size=30,
+                        ),
+                    )
+
+                case self.GEMINI_1_5_PRO:
+                    return ChatGoogleGenerativeAI(
+                        model="gemini-1.5-pro-002",
+                        temperature=0,
+                        max_tokens=8192,
+                        timeout=None,
+                        max_retries=1,
+                        rate_limiter=InMemoryRateLimiter(
+                            requests_per_second=15,
                             max_bucket_size=15,
                         ),
                     )
@@ -123,12 +118,12 @@ class LangChainExtractor(BaseExtractor):
                     return ChatGoogleGenerativeAI(
                         model="gemini-2.0-flash-001",
                         temperature=0,
-                        max_tokens=4096,
+                        max_tokens=8192,
                         timeout=None,
                         max_retries=1,
                         rate_limiter=InMemoryRateLimiter(
-                            requests_per_second=20,
-                            max_bucket_size=15,
+                            requests_per_second=30,
+                            max_bucket_size=30,
                         ),
                     )
 
@@ -136,7 +131,12 @@ class LangChainExtractor(BaseExtractor):
 
         def construct_chain(self) -> Runnable:
             """Return an instance of the full corresponding extraction pipeline."""
-            return PROMPT_TEMPLATE | self.construct_model()
+            return (
+                RunnableLambda(prepare_image)
+                | PROMPT_TEMPLATE
+                | self.construct_model()
+                | ArticleOutputParser()
+            )
 
         @property
         def max_image_input_size(self) -> tuple[int, int]:
@@ -144,84 +144,97 @@ class LangChainExtractor(BaseExtractor):
             match self:
                 case self.CLAUDE_3_5:
                     return 1536, 1536
-                case self.GEMINI_1_5 | self.GEMINI_2_0:
+                case self.GEMINI_1_5 | self.GEMINI_1_5_PRO | self.GEMINI_2_0:
                     return 3072, 3072
             raise ValueError
 
     logger = logging.getLogger(__name__)
 
-    def __init__(self, model: Model) -> None:
+    def __init__(self, model: str | Model) -> None:
         """Initialise the extractor."""
-        self.model = model.construct_chain()
+        if isinstance(model, str):
+            model = self.Model(model)
 
-    async def extract_all(self, pages: Iterator[Page]) -> AsyncIterator[Article]:
+        self.model = model.construct_chain().with_fallbacks([
+            self.Model.GEMINI_1_5_PRO.construct_chain()
+        ])
+
+    async def extract_all(
+        self, pages: Sequence[Path]
+    ) -> AsyncIterator[tuple[Path, Article]]:
         """Extract all the articles from the provided pages."""
+        async for idx, response in self.model.abatch_as_completed(
+            pages, config=RunnableConfig(max_concurrency=12), return_exceptions=True
+        ):
+            page: Path = pages[idx]
+            if isinstance(response, Exception):
+                self.logger.error("Extraction failed for %s: %s", page, response)
+                continue
 
-        async def process(input_page: Page) -> tuple[Page, Output | Exception]:
-            try:
-                input_page.image.thumbnail(self.Model.GEMINI_2_0.max_image_input_size)
-                return input_page, await self.model.ainvoke({
-                    "image_data": pillow_image_to_base64_string(input_page.image)
-                })
-            except Exception as e:
-                self.logger.exception(
-                    "%s page %d failed", input_page.issue, input_page.page_no
-                )
-                return input_page, e
-
-        for coro in asyncio.as_completed(map(process, pages)):
-            page, response = await coro
             self.logger.debug(response)
 
-            if isinstance(response, Exception):
-                self.logger.error(
-                    "Failed to extract text from %s page %d",
-                    page.issue,
-                    page.page_no,
-                )
-                continue
+            output: list[Article] = response
+            for article in output:
+                yield page, article
 
-            response_metadata: dict = response.response_metadata
 
-            finish_reason = (
-                response_metadata.get("finish_reason")
-                or response_metadata.get("stop_reason")
-            ).lower()
-            if finish_reason not in {"stop", "end_turn"}:
-                self.logger.error(
-                    "Unexpected finish reason %s for article in %s page %d",
-                    str(finish_reason),
-                    page.issue,
-                    page.page_no,
-                )
-                continue
+class ArticleOutputParser(BaseGenerationOutputParser[Sequence[Article]]):
+    """Custom LangChain parser yields articles."""
 
-            feedback = response_metadata.get("prompt_feedback", {})
-            if (block_reason := feedback.get("block_reason", 0)) != 0:
-                self.logger.error(
-                    "Extraction blocked for %s page %d with code %d",
-                    page.issue,
-                    page.page_no,
-                    block_reason,
-                )
-                continue
+    @override
+    def parse_result(
+        self, result: list[Generation], *, partial: bool = False
+    ) -> Sequence[Article]:
+        """Parse the response into an article."""
+        if len(result) != 1:
+            msg = "Expected exactly one response"
+            raise NotImplementedError(msg)
+        generation: Generation = result[0]
 
-            soup = bs4.BeautifulSoup(_get_llm_xml(response.content), "lxml")
-            articles = soup.find_all("article", recursive=True)
-            if not articles:
-                self.logger.warning(
-                    "No articles returned for %s page %s", page.issue, page.page_no
-                )
-            for article in articles:
-                yield Article(
-                    issue=page.issue,
-                    page_no=page.page_no,
-                    headline=_get_text(article, "headline", "Untitled"),
-                    text_body=article.find("main"),
-                    strapline=_get_text(article, "strapline"),
-                    author_name=_get_text(article, "author_name"),
-                    category=_get_text(article, "category"),
-                )
+        if not isinstance(generation, ChatGeneration):
+            msg = "This output parser can only be used with a chat generation."
+            raise OutputParserException(msg)
+
+        response: BaseMessage = generation.message
+        response_metadata: dict = response.response_metadata
+
+        finish_reason = (
+            response_metadata.get("finish_reason")
+            or response_metadata.get("stop_reason")
+            or "missing"
+        ).lower()
+        if finish_reason not in {"stop", "end_turn"}:
+            msg = f"Unexpected finish reason {finish_reason}"
+            raise OutputParserException(msg)
+
+        feedback = response_metadata.get("prompt_feedback", {})
+        if (block_reason := feedback.get("block_reason", 0)) != 0:
+            msg = f"Extraction blocked with code {block_reason}"
+            raise OutputParserException(msg)
+
+        soup = bs4.BeautifulSoup(_get_llm_xml(response.content), "lxml")
+        articles = soup.find_all("article", recursive=True)
+        if not articles:
+            msg = "No articles returned"
+            raise OutputParserException(msg)
+
+        return [
+            Article(
+                headline=_get_text(article, "headline", "Untitled"),
+                text_body=article.find("main"),
+                strapline=_get_text(article, "strapline"),
+                author_name=_get_text(article, "author_name"),
+                category=_get_text(article, "category"),
+            )
+            for article in articles
+        ]
+
+
+def prepare_image(path: Path) -> Input:
+    """Prepare an image for processing."""
+    image = open_image(path)
+    image.thumbnail((3072, 3072))
+    return {"image_data": pillow_image_to_base64_string(image)}
 
 
 def _get_text(tree: Tag, query: str, default: str | None = None) -> str | None:
