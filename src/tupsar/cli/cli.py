@@ -12,7 +12,6 @@ from rich.console import Console
 from rich.logging import RichHandler
 from rich_argparse import RichHelpFormatter
 
-from tupsar.extractor import BaseExtractor
 from tupsar.extractor.langchain import LangChainExtractor
 from tupsar.file.path import unique_path
 
@@ -87,7 +86,9 @@ def cli() -> None:
     )
 
 
-async def main(pages: list[Path], output_path: Path, extractor: BaseExtractor) -> None:
+async def main(
+    pages: list[Path], output_path: Path, extractor: LangChainExtractor
+) -> None:
     """Run the main program entry-point."""
     output_path.mkdir(parents=True, exist_ok=True)
 

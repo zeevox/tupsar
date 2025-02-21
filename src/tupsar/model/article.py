@@ -37,7 +37,7 @@ class Article:
         }
 
         # Create bs4 tags for each metadata
-        meta_tags = []
+        meta_tags: list[bs4.Tag] = []
         for key, value in article_meta.items():
             if not value:
                 continue
@@ -47,7 +47,7 @@ class Article:
             )
 
         # Package them up into the <head>
-        head = bs4.Tag(name="head")
+        head: bs4.Tag = bs4.Tag(name="head")
         head.extend(meta_tags)
 
         # Create a bs4 tag for the article body

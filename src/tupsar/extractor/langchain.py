@@ -5,7 +5,7 @@ import logging
 import re
 from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, override
+from typing import TYPE_CHECKING, Any, Final, override
 
 import bs4
 from bs4 import Tag
@@ -17,10 +17,8 @@ from langchain_core.outputs import ChatGeneration, Generation
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.rate_limiters import InMemoryRateLimiter
 from langchain_core.runnables import Runnable, RunnableConfig, RunnableLambda
-from langchain_core.runnables.utils import Input
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from tupsar.extractor import BaseExtractor
 from tupsar.file.image import open_image, pillow_image_to_base64_string
 from tupsar.model.article import Article
 
@@ -61,7 +59,7 @@ PROMPT_TEMPLATE: Final[ChatPromptTemplate] = ChatPromptTemplate.from_messages([
 ])
 
 
-class LangChainExtractor(BaseExtractor):
+class LangChainExtractor:
     """Extract text from images using the LangChain library."""
 
     class Model(enum.StrEnum):
@@ -86,6 +84,7 @@ class LangChainExtractor(BaseExtractor):
                             requests_per_second=0.2,
                             max_bucket_size=3,
                         ),
+                        stop=["\n\nHuman:"],
                     )
 
                 case self.GEMINI_1_5:
@@ -129,7 +128,7 @@ class LangChainExtractor(BaseExtractor):
 
             raise ValueError
 
-        def construct_chain(self) -> Runnable:
+        def construct_chain(self) -> Runnable[Path, Sequence[Article]]:
             """Return an instance of the full corresponding extraction pipeline."""
             return (
                 RunnableLambda(prepare_image)
@@ -173,7 +172,7 @@ class LangChainExtractor(BaseExtractor):
 
             self.logger.debug(response)
 
-            output: list[Article] = response
+            output: Sequence[Article] = response
             for article in output:
                 yield page, article
 
@@ -196,7 +195,7 @@ class ArticleOutputParser(BaseGenerationOutputParser[Sequence[Article]]):
             raise OutputParserException(msg)
 
         response: BaseMessage = generation.message
-        response_metadata: dict = response.response_metadata
+        response_metadata: dict[str, Any] = response.response_metadata
 
         finish_reason = (
             response_metadata.get("finish_reason")
@@ -212,6 +211,10 @@ class ArticleOutputParser(BaseGenerationOutputParser[Sequence[Article]]):
             msg = f"Extraction blocked with code {block_reason}"
             raise OutputParserException(msg)
 
+        if not isinstance(response.content, str):
+            msg = "Expected response content to be a string"
+            raise OutputParserException(msg)
+
         soup = bs4.BeautifulSoup(_get_llm_xml(response.content), "lxml")
         articles = soup.find_all("article", recursive=True)
         if not articles:
@@ -220,7 +223,7 @@ class ArticleOutputParser(BaseGenerationOutputParser[Sequence[Article]]):
 
         return [
             Article(
-                headline=_get_text(article, "headline", "Untitled"),
+                headline=_get_text(article, "headline") or "Untitled",
                 text_body=article.find("main"),
                 strapline=_get_text(article, "strapline"),
                 author_name=_get_text(article, "author_name"),
@@ -230,21 +233,22 @@ class ArticleOutputParser(BaseGenerationOutputParser[Sequence[Article]]):
         ]
 
 
-def prepare_image(path: Path) -> Input:
+def prepare_image(path: Path) -> dict[str, str]:
     """Prepare an image for processing."""
     image = open_image(path)
     image.thumbnail((3072, 3072))
     return {"image_data": pillow_image_to_base64_string(image)}
 
 
-def _get_text(tree: Tag, query: str, default: str | None = None) -> str | None:
+def _get_text(tree: Tag, query: str) -> str | None:
     element = tree.find(query)
     if element is not None:
-        return element.get_text(strip=True)
-    return default
+        text: str = element.get_text(strip=True)
+        return text
+    return None
 
 
-encoding_matcher: re.Pattern = re.compile(
+encoding_matcher: re.Pattern[str] = re.compile(
     r"<([^>]*encoding[^>]*)>\n(.*)", re.MULTILINE | re.DOTALL
 )
 

@@ -22,7 +22,7 @@ dependencies = [
     "ijson>=3.3.0",
     "langchain-core>=0.3.37",
     "langchain-anthropic>=0.3.7",
-    "langchain-google-genai>=2.0.9",
+    "langchain-google-genai>=2.0.10",
     "python-frontmatter>=1.1.0",
     "polars>=1.22.0",
     "rapidfuzz>=3.12.1",
@@ -44,11 +44,12 @@ build-backend = "hatchling.build"
 dev = [
     "matplotlib>=3.10.0",
     "mypy>=1.15.0",
-    "notebook>=7.4.0a3",
+    "notebook>=7.4.0b0",
     "pre-commit>=4.1.0",
     "pyright>=1.1.394",
-    "ruff>=0.9.6",
+    "ruff>=0.9.7",
     "seaborn>=0.13.2",
+    "types-beautifulsoup4>=4.12.0.20250204",
     "types-pyyaml>=6.0.12.20241230",
 ]
 
