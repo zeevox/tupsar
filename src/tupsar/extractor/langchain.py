@@ -86,13 +86,14 @@ class LangChainExtractor(BaseExtractor):
     class Model(enum.StrEnum):
         """Supported large language models."""
 
-        GEMINI = enum.auto()
-        CLAUDE = enum.auto()
+        GEMINI_1_5 = enum.auto()
+        GEMINI_2_0 = enum.auto()
+        CLAUDE_3_5 = enum.auto()
 
         def construct_model(self) -> BaseChatModel:
             """Return an instance of the corresponding LangChain model."""
             match self:
-                case self.CLAUDE:
+                case self.CLAUDE_3_5:
                     return ChatAnthropic(
                         model_name="claude-3-5-sonnet-20241022",
                         temperature=0,
@@ -105,7 +106,20 @@ class LangChainExtractor(BaseExtractor):
                         ),
                     )
 
-                case self.GEMINI:
+                case self.GEMINI_1_5:
+                    return ChatGoogleGenerativeAI(
+                        model="gemini-1.5-flash-002",
+                        temperature=0,
+                        max_tokens=4096,
+                        timeout=None,
+                        max_retries=1,
+                        rate_limiter=InMemoryRateLimiter(
+                            requests_per_second=20,
+                            max_bucket_size=15,
+                        ),
+                    )
+
+                case self.GEMINI_2_0:
                     return ChatGoogleGenerativeAI(
                         model="gemini-2.0-flash-001",
                         temperature=0,
@@ -128,32 +142,24 @@ class LangChainExtractor(BaseExtractor):
         def max_image_input_size(self) -> tuple[int, int]:
             """Get the maximum input image size the model supports."""
             match self:
-                case self.CLAUDE:
+                case self.CLAUDE_3_5:
                     return 1536, 1536
-                case self.GEMINI:
+                case self.GEMINI_1_5 | self.GEMINI_2_0:
                     return 3072, 3072
             raise ValueError
 
     logger = logging.getLogger(__name__)
 
-    def __init__(self, *models: Model) -> None:
+    def __init__(self, model: Model) -> None:
         """Initialise the extractor."""
-        primary, *fallbacks = models
-
-        self.model = (
-            primary.construct_model()
-            if not fallbacks
-            else primary.construct_chain().with_fallbacks([
-                fallback.construct_chain() for fallback in fallbacks
-            ])
-        )
+        self.model = model.construct_chain()
 
     async def extract_all(self, pages: Iterator[Page]) -> AsyncIterator[Article]:
         """Extract all the articles from the provided pages."""
 
         async def process(input_page: Page) -> tuple[Page, Output | Exception]:
             try:
-                input_page.image.thumbnail(self.Model.GEMINI.max_image_input_size)
+                input_page.image.thumbnail(self.Model.GEMINI_2_0.max_image_input_size)
                 return input_page, await self.model.ainvoke({
                     "image_data": pillow_image_to_base64_string(input_page.image)
                 })
@@ -177,27 +183,31 @@ class LangChainExtractor(BaseExtractor):
 
             response_metadata: dict = response.response_metadata
 
-            if response_metadata.get("finish_reason") != "STOP":
+            finish_reason = (
+                response_metadata.get("finish_reason")
+                or response_metadata.get("stop_reason")
+            ).lower()
+            if finish_reason not in {"stop", "end_turn"}:
                 self.logger.error(
                     "Unexpected finish reason %s for article in %s page %d",
-                    response.response_metadata["finish_reason"],
+                    str(finish_reason),
                     page.issue,
                     page.page_no,
                 )
                 continue
 
             feedback = response_metadata.get("prompt_feedback", {})
-            if feedback.get("block_reason") != 0:
+            if (block_reason := feedback.get("block_reason", 0)) != 0:
                 self.logger.error(
                     "Extraction blocked for %s page %d with code %d",
                     page.issue,
                     page.page_no,
-                    feedback["block_reason"],
+                    block_reason,
                 )
                 continue
 
-            soup = bs4.BeautifulSoup(_get_llm_xml(response.content), "lxml-xml")
-            articles = soup.find_all("article")
+            soup = bs4.BeautifulSoup(_get_llm_xml(response.content), "lxml")
+            articles = soup.find_all("article", recursive=True)
             if not articles:
                 self.logger.warning(
                     "No articles returned for %s page %s", page.issue, page.page_no

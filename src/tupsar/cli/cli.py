@@ -13,8 +13,6 @@ from rich.logging import RichHandler
 from rich_argparse import RichHelpFormatter
 
 from tupsar.extractor import BaseExtractor
-from tupsar.extractor.azure import AzureDocumentExtractor
-from tupsar.extractor.gemini import GeminiExtractor
 from tupsar.extractor.langchain import LangChainExtractor
 from tupsar.file.image import open_image
 from tupsar.file.mime import FileType
@@ -39,9 +37,9 @@ def _process_files(file_paths: list[Path]) -> Iterator[Page]:
 
 
 extractors = {
-    "azure": AzureDocumentExtractor,
-    "gemini": GeminiExtractor,
-    "langchain": LangChainExtractor,
+    "gemini-1.5": LangChainExtractor.Model.GEMINI_1_5,
+    "gemini-2.0": LangChainExtractor.Model.GEMINI_2_0,
+    "claude-3.5": LangChainExtractor.Model.CLAUDE_3_5,
 }
 
 
@@ -102,10 +100,7 @@ def cli() -> None:
         main(
             args.inputs,
             args.output_path,
-            LangChainExtractor(
-                LangChainExtractor.Model.GEMINI,
-                LangChainExtractor.Model.CLAUDE,
-            ),
+            LangChainExtractor(extractors[args.extractor]),
         )
     )
 

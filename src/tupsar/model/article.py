@@ -43,7 +43,7 @@ class Article:
         # Create bs4 tags for each metadata
         meta_tags = []
         for key, value in article_meta.items():
-            if value is None:
+            if not value:
                 continue
 
             meta_tags.append(
