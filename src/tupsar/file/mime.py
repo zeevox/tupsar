@@ -5,6 +5,8 @@ from pathlib import Path
 
 import magic
 
+mime = magic.Magic(mime=True)
+
 
 class FileType(Enum):
     """Represents the type of the input file and provides helper methods."""
@@ -19,7 +21,6 @@ class FileType(Enum):
 
         Raises ValueError for unsupported file types.
         """
-        mime = magic.Magic(mime=True)
         mime_type = mime.from_file(str(file_path))
 
         if mime_type.startswith("image/"):
