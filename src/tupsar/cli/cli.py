@@ -12,7 +12,8 @@ from rich.console import Console
 from rich.logging import RichHandler
 from rich_argparse import RichHelpFormatter
 
-from tupsar.extractor.langchain import LangChainExtractor
+from tupsar.extractor.extractor import LangChainExtractor
+from tupsar.extractor.pipeline import Model
 from tupsar.file.path import unique_path
 
 logger = logging.getLogger("tupsar")
@@ -54,7 +55,7 @@ def cli() -> None:
     parser.add_argument(
         "-e",
         "--extractor",
-        choices=LangChainExtractor.Model,
+        choices=Model,
         default="langchain",
         help="Extractor to use",
     )
