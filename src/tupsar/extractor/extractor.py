@@ -2,10 +2,13 @@
 
 import logging
 from collections.abc import AsyncIterator, Sequence
+from decimal import Decimal
 from pathlib import Path
 
-from langchain_core.runnables import RunnableConfig
+from babel.numbers import format_currency
+from langchain_core.runnables import Runnable, RunnableConfig
 
+from tupsar.extractor.cost import CostTracker
 from tupsar.extractor.pipeline import Model
 from tupsar.model.article import Article
 
@@ -15,20 +18,28 @@ class LangChainExtractor:
 
     logger = logging.getLogger(__name__)
 
-    def __init__(self, model: str | Model) -> None:
-        """Initialise the extractor."""
-        if isinstance(model, str):
-            model = Model(model)
+    chain: Runnable[Path, Sequence[Article]]
+    cost_trackers: Sequence[CostTracker]
 
-        self.model = model.construct_chain().with_fallbacks([
-            Model.GEMINI_1_5_PRO.construct_chain()
-        ])
+    def __init__(self, model_name: str, *fallback_models: str) -> None:
+        """Initialise the extractor."""
+        models: list[Model] = [Model(name) for name in [model_name, *fallback_models]]
+        costs, chains = zip(*[model.construct_chain() for model in models], strict=True)
+        primary_chain, *fallback_chains = chains
+
+        self.chain = primary_chain
+
+        # Add fallbacks if provided
+        if fallback_chains:
+            self.chain = self.chain.with_fallbacks(fallback_chains)
+
+        self.cost_trackers = costs
 
     async def extract_all(
         self, pages: Sequence[Path]
     ) -> AsyncIterator[tuple[Path, Article]]:
         """Extract all the articles from the provided pages."""
-        async for idx, response in self.model.abatch_as_completed(
+        async for idx, response in self.chain.abatch_as_completed(
             pages, config=RunnableConfig(max_concurrency=12), return_exceptions=True
         ):
             page: Path = pages[idx]
@@ -41,3 +52,10 @@ class LangChainExtractor:
             output: Sequence[Article] = response
             for article in output:
                 yield page, article
+
+        total_cost = sum(
+            (cost_tracker.total_cost for cost_tracker in self.cost_trackers),
+            start=Decimal(0),
+        )
+        cost_str: str = format_currency(total_cost, "USD")
+        self.logger.info("Total cost: %s", cost_str)

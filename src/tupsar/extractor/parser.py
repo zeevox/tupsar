@@ -9,9 +9,12 @@ from typing import TYPE_CHECKING, Any, override
 import bs4
 from bs4 import Tag
 from langchain_core.exceptions import OutputParserException
+from langchain_core.messages.ai import AIMessage
 from langchain_core.output_parsers import BaseGenerationOutputParser
 from langchain_core.outputs import ChatGeneration, Generation
+from pydantic import PrivateAttr
 
+from tupsar.extractor.cost import CostTracker
 from tupsar.model.article import Article
 
 if TYPE_CHECKING:
@@ -20,6 +23,13 @@ if TYPE_CHECKING:
 
 class ArticleOutputParser(BaseGenerationOutputParser[Sequence[Article]]):
     """Custom LangChain parser yields articles."""
+
+    _cost_tracker: CostTracker = PrivateAttr()
+
+    def __init__(self, cost_tracker: CostTracker) -> None:
+        """Initialise a new output parser."""
+        super().__init__()
+        self._cost_tracker = cost_tracker
 
     @property
     def logger(self) -> Logger:
@@ -42,6 +52,18 @@ class ArticleOutputParser(BaseGenerationOutputParser[Sequence[Article]]):
 
         response: BaseMessage = generation.message
         self.logger.debug(response)
+
+        if not isinstance(response, AIMessage):
+            msg = "Expected an AIMessage"
+            raise OutputParserException(msg)
+
+        if response.usage_metadata is not None:
+            self._cost_tracker.add(
+                response.usage_metadata["input_tokens"],
+                response.usage_metadata["output_tokens"],
+            )
+        else:
+            self.logger.warning("No usage metadata found")
 
         response_metadata: dict[str, Any] = response.response_metadata
 

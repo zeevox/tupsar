@@ -2,6 +2,7 @@
 
 import enum
 from collections.abc import Sequence
+from decimal import Decimal
 from pathlib import Path
 from typing import Final
 
@@ -13,6 +14,7 @@ from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_google_genai import ChatGoogleGenerativeAI
 from PIL.Image import Resampling
 
+from tupsar.extractor.cost import CostTracker
 from tupsar.extractor.parser import ArticleOutputParser
 from tupsar.file.image import open_image, pillow_image_to_base64_string
 from tupsar.model.article import Article
@@ -84,13 +86,37 @@ class Model(enum.StrEnum):
 
         raise ValueError
 
-    def construct_chain(self) -> Runnable[Path, Sequence[Article]]:
+    def get_cost_tracker(self) -> CostTracker:
+        """Return the cost tracker for the model."""
+        match self:
+            case self.GEMINI_2_0:
+                # Input $0.10 Output $0.40 / MTok
+                return CostTracker(
+                    Decimal("0.10") / 1_000_000,
+                    Decimal("0.40") / 1_000_000,
+                )
+            case self.GEMINI_1_5_PRO:
+                # Input $1.25 Output $5.00 / MTok
+                return CostTracker(
+                    Decimal("1.25") / 1_000_000,
+                    Decimal("5.00") / 1_000_000,
+                )
+            case self.GEMINI_1_5:
+                # Input $0.075 Output $0.30 / MTok
+                return CostTracker(
+                    Decimal("0.075") / 1_000_000,
+                    Decimal("0.30") / 1_000_000,
+                )
+        raise ValueError
+
+    def construct_chain(self) -> tuple[CostTracker, Runnable[Path, Sequence[Article]]]:
         """Return an instance of the full corresponding extraction pipeline."""
-        return (
+        cost_tracker = self.get_cost_tracker()
+        return cost_tracker, (
             RunnableLambda(prepare_image)
             | PROMPT_TEMPLATE
             | self.construct_model()
-            | ArticleOutputParser()
+            | ArticleOutputParser(cost_tracker)
         )
 
 

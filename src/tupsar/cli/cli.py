@@ -56,8 +56,9 @@ def cli() -> None:
         "-e",
         "--extractor",
         choices=Model,
-        default="langchain",
-        help="Extractor to use",
+        nargs="+",
+        default=Model.GEMINI_2_0,
+        help="Extractor to use. Specify a second time to choose a fallback extractor.",
     )
     args = parser.parse_args()
 
@@ -82,7 +83,7 @@ def cli() -> None:
         main(
             args.inputs,
             args.output_path,
-            LangChainExtractor(args.extractor),
+            LangChainExtractor(*args.extractor),
         )
     )
 
