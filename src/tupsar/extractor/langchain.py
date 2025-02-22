@@ -18,6 +18,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.rate_limiters import InMemoryRateLimiter
 from langchain_core.runnables import Runnable, RunnableConfig, RunnableLambda
 from langchain_google_genai import ChatGoogleGenerativeAI
+from PIL.Image import Resampling
 
 from tupsar.file.image import open_image, pillow_image_to_base64_string
 from tupsar.model.article import Article
@@ -137,16 +138,6 @@ class LangChainExtractor:
                 | ArticleOutputParser()
             )
 
-        @property
-        def max_image_input_size(self) -> tuple[int, int]:
-            """Get the maximum input image size the model supports."""
-            match self:
-                case self.CLAUDE_3_5:
-                    return 1536, 1536
-                case self.GEMINI_1_5 | self.GEMINI_1_5_PRO | self.GEMINI_2_0:
-                    return 3072, 3072
-            raise ValueError
-
     logger = logging.getLogger(__name__)
 
     def __init__(self, model: str | Model) -> None:
@@ -236,7 +227,9 @@ class ArticleOutputParser(BaseGenerationOutputParser[Sequence[Article]]):
 def prepare_image(path: Path) -> dict[str, str]:
     """Prepare an image for processing."""
     image = open_image(path)
-    image.thumbnail((3072, 3072))
+    max_size: int = 3072
+    if max(image.size) > max_size:
+        image.thumbnail((max_size, max_size), resample=Resampling.LANCZOS)
     return {"image_data": pillow_image_to_base64_string(image)}
 
 

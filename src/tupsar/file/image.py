@@ -30,7 +30,7 @@ def pillow_image_to_base64_url(img: Image) -> str:
 def pillow_image_to_base64_string(img: Image) -> str:
     """Encode a PIL image in base64."""
     buffered = io.BytesIO()
-    img.save(buffered, format="JPEG")
+    img.save(buffered, format="JPEG", quality=95)
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 
