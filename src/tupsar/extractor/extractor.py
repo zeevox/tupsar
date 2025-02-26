@@ -44,7 +44,14 @@ class LangChainExtractor:
         ):
             page: Path = pages[idx]
             if isinstance(response, Exception):
-                self.logger.error("Extraction failed for %s: %s", page, response)
+                exception: Exception = response
+                # Log error message, page and full traceback
+                self.logger.error(
+                    "Error processing %s: %s",
+                    page,
+                    exception,
+                    exc_info=exception,
+                )
                 continue
 
             self.logger.debug(response)

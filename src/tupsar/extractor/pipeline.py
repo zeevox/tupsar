@@ -26,14 +26,14 @@ class Model(enum.StrEnum):
     GEMINI_1_5 = "gemini-1.5"
     GEMINI_1_5_PRO = "gemini-1.5-pro"
     GEMINI_2_0 = "gemini-2.0"
-    CLAUDE_3_5 = "claude-3.5"
+    CLAUDE_3_7 = "claude-3.7"
 
     def construct_model(self) -> BaseChatModel:
         """Return an instance of the corresponding LangChain model."""
         match self:
-            case self.CLAUDE_3_5:
+            case self.CLAUDE_3_7:
                 return ChatAnthropic(
-                    model_name="claude-3-5-sonnet-20241022",
+                    model_name="claude-3-7-sonnet-latest",
                     temperature=0,
                     max_tokens_to_sample=8192,
                     timeout=None,
@@ -106,6 +106,12 @@ class Model(enum.StrEnum):
                 return CostTracker(
                     Decimal("0.075") / 1_000_000,
                     Decimal("0.30") / 1_000_000,
+                )
+            case self.CLAUDE_3_7:
+                # Input $3 Output $15 / MTok
+                return CostTracker(
+                    Decimal(3) / 1_000_000,
+                    Decimal(15) / 1_000_000,
                 )
         raise ValueError
 

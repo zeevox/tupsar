@@ -88,8 +88,7 @@ class ArticleOutputParser(BaseGenerationOutputParser[Sequence[Article]]):
         soup = bs4.BeautifulSoup(_get_llm_xml(response.content), "lxml")
         articles = soup.find_all("article", recursive=True)
         if not articles:
-            msg = "No articles returned"
-            raise OutputParserException(msg)
+            self.logger.warning("No articles returned")
 
         return [
             Article(
