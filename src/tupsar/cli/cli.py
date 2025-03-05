@@ -36,10 +36,14 @@ def cli() -> None:
         logger.warning("No .env file containing API keys found")
 
     # Set up argument parser
-    parser = argparse.ArgumentParser(formatter_class=RichHelpFormatter)
+    parser = argparse.ArgumentParser(
+        formatter_class=RichHelpFormatter,
+        description="Command-line tool to extract text articles from newspaper scans",
+        usage="%(prog)s [options] <file>...",
+    )
     parser.add_argument(
         "inputs",
-        metavar="FILE",
+        metavar="<file>",
         type=Path,
         nargs="+",
         help="Input file(s) to convert",
@@ -48,9 +52,9 @@ def cli() -> None:
         "-o",
         "--output",
         dest="output_path",
-        metavar="DIR",
+        metavar="<dir>",
         type=Path,
-        help="Output directory",
+        help="Output directory. (Default: %(default)s)",
         default=Path("out"),
     )
     parser.add_argument(
@@ -63,10 +67,15 @@ def cli() -> None:
     parser.add_argument(
         "-e",
         "--extractor",
-        choices=Model,
+        metavar="<model>",
+        choices=Model.__members__.values(),
         nargs="+",
-        default=Model.GEMINI_2_0,
-        help="Extractor to use. Specify a second time to choose a fallback extractor.",
+        default=[Model.GEMINI_2_0.value],
+        help=(
+            "Model to use for extraction. (Default: Gemini 2.0) "
+            "Specify a second time to choose a fallback extractor. "
+            "Choices: {%(choices)s}"
+        ),
     )
     args = parser.parse_args()
 
