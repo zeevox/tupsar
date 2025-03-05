@@ -39,6 +39,7 @@ build-backend = "hatchling.build"
 dev = [
     "matplotlib>=3.10.0",
     "mypy>=1.15.0",
+    "natsort>=8.4.0",
     "notebook>=7.4.0b0",
     "pre-commit>=4.1.0",
     "pyright>=1.1.394",
@@ -55,6 +56,7 @@ preview = true
 
 [tool.ruff.lint]
 preview = true
+exclude = ["*.ipynb"]
 
 # Enable all the rules
 select = ["ALL"]
@@ -64,13 +66,13 @@ ignore = [
     # Disable pydoclint rules, since they do not support Sphinx docstrings
     # see https://github.com/astral-sh/ruff/issues/12434
     "DOC",
-
     # Disable copyright header check
     "CPY",
-
     "D203", # prefer D211
     "D212", # prefer D213
     "COM812", # unnecessary rule
+    "D100", # I don't need doc comments
+    "EXE003" # use uv for scripts instead of python shebang
 ]
 
 [tool.pyright]
