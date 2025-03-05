@@ -1,7 +1,7 @@
 """Extractor implementation using LangChain."""
 
 import logging
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from decimal import Decimal
 from pathlib import Path
 
@@ -36,22 +36,20 @@ class LangChainExtractor:
         self.cost_trackers = costs
 
     async def extract_all(
-        self, pages: Sequence[Path]
+        self, pages: Sequence[Path], *, callback: Callable[[Path], None] | None = None
     ) -> AsyncIterator[tuple[Path, Article]]:
         """Extract all the articles from the provided pages."""
         async for idx, response in self.chain.abatch_as_completed(
             pages, config=RunnableConfig(max_concurrency=12), return_exceptions=True
         ):
             page: Path = pages[idx]
+            if callback is not None:
+                callback(page)
+
             if isinstance(response, Exception):
                 exception: Exception = response
                 # Log error message, page and full traceback
-                self.logger.error(
-                    "Error processing %s: %s",
-                    page,
-                    exception,
-                    exc_info=exception,
-                )
+                self.logger.error("Error processing %s - %s", page, exception)
                 continue
 
             self.logger.debug(response)

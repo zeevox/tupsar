@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, override
 
 import bs4
 from bs4 import Tag
-from langchain_core.exceptions import OutputParserException
+from langchain_core.exceptions import LangChainException, OutputParserException
 from langchain_core.messages.ai import AIMessage
 from langchain_core.output_parsers import BaseGenerationOutputParser
 from langchain_core.outputs import ChatGeneration, Generation
@@ -19,6 +19,10 @@ from tupsar.model.article import Article
 
 if TYPE_CHECKING:
     from langchain_core.messages import BaseMessage
+
+
+class ArticleExtractionError(ValueError, LangChainException):
+    """Custom exception for article extraction."""
 
 
 class ArticleOutputParser(BaseGenerationOutputParser[Sequence[Article]]):
@@ -70,16 +74,12 @@ class ArticleOutputParser(BaseGenerationOutputParser[Sequence[Article]]):
         finish_reason = (
             response_metadata.get("finish_reason")
             or response_metadata.get("stop_reason")
+            or response_metadata.get("prompt_feedback", {}).get("block_reason", 0)
             or "missing"
-        ).lower()
-        if finish_reason not in {"stop", "end_turn"}:
-            msg = f"Unexpected finish reason {finish_reason}"
-            raise OutputParserException(msg)
-
-        feedback = response_metadata.get("prompt_feedback", {})
-        if (block_reason := feedback.get("block_reason", 0)) != 0:
-            msg = f"Extraction blocked with code {block_reason}"
-            raise OutputParserException(msg)
+        )
+        if finish_reason not in {"STOP", "end_turn", 0}:
+            msg = f"Unexpected finish reason: {finish_reason}"
+            raise ArticleExtractionError(msg)
 
         if not isinstance(response.content, str):
             msg = "Expected response content to be a string"
@@ -88,7 +88,8 @@ class ArticleOutputParser(BaseGenerationOutputParser[Sequence[Article]]):
         soup = bs4.BeautifulSoup(_get_llm_xml(response.content), "lxml")
         articles = soup.find_all("article", recursive=True)
         if not articles:
-            self.logger.warning("No articles returned")
+            msg = "No articles returned"
+            raise ArticleExtractionError(msg)
 
         return [
             Article(

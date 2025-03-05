@@ -5,11 +5,13 @@ import asyncio
 import logging
 from logging import FileHandler
 from pathlib import Path
+from typing import Final
 
 import asyncstdlib as a
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.logging import RichHandler
+from rich.progress import Progress
 from rich_argparse import RichHelpFormatter
 
 from tupsar.extractor.extractor import LangChainExtractor
@@ -17,6 +19,12 @@ from tupsar.extractor.pipeline import Model
 from tupsar.file.path import unique_path
 
 logger = logging.getLogger("tupsar")
+LOG_LEVELS: Final[list[int]] = [
+    logging.ERROR,
+    logging.WARNING,
+    logging.INFO,
+    logging.DEBUG,
+]
 
 
 console: Console = Console()
@@ -63,14 +71,9 @@ def cli() -> None:
     args = parser.parse_args()
 
     # Set logging verbosity
+    log_level: int = min(args.verbose, len(LOG_LEVELS) - 1)
     logging.basicConfig(
-        level=(
-            logging.DEBUG
-            if args.verbose > 1
-            else logging.INFO
-            if args.verbose > 0
-            else logging.WARNING
-        ),
+        level=LOG_LEVELS[log_level],
         format="%(message)s",
         datefmt="[%X]",
         handlers=[
@@ -94,8 +97,14 @@ async def main(
     """Run the main program entry-point."""
     output_path.mkdir(parents=True, exist_ok=True)
 
-    with console.status("[bold green]Extracting articles...") as status:
-        async for counter, (path, article) in a.enumerate(extractor.extract_all(pages)):
+    with Progress(console=console) as progress:
+        status = progress.add_task("Extracting articles...", total=len(pages))
+
+        def update_progress(_: Path) -> None:
+            progress.update(status, advance=1)
+
+        extraction = extractor.extract_all(pages, callback=update_progress)
+        async for counter, (path, article) in a.enumerate(extraction):
             output_file = unique_path(output_path / f"{path.stem}_{article.slug}.html")
             article.write_out(output_file)
-            status.update(f"Extracted {counter + 1} articles")
+            progress.update(status, description=f"Extracted {counter + 1} articles")
