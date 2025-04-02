@@ -15,9 +15,9 @@ from pathlib import Path
 from typing import Self
 
 import polars as pl
-import pypandoc
+import pypandoc  # type: ignore[import]
 from bs4 import BeautifulSoup, SoupStrainer
-from loguru import logger  # Using loguru for enhanced logging
+from loguru import logger  # type: ignore[import]
 from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 
@@ -117,6 +117,11 @@ def main() -> None:
 
     logger.info("Converting processed data to Polars DataFrame...")
     articles_df = pl.from_records([dataclasses.asdict(article) for article in results])
+
+    # Fix incorrectly inferred column data types
+    articles_df = articles_df.with_columns(
+        pl.col("page").cast(pl.Int32),
+    )
 
     logger.info(f"Saving DataFrame to Parquet file: {OUTPUT_PARQUET_FILE}")
     articles_df.write_parquet(OUTPUT_PARQUET_FILE)
