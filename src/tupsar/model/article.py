@@ -5,6 +5,7 @@ import pathlib
 import re
 import textwrap
 import unicodedata
+from typing import Self
 
 import bs4
 
@@ -62,8 +63,8 @@ class Article:
 
         output_path.write_text(html.prettify(formatter=formatter), encoding="utf-8")
 
-    @staticmethod
-    def read_in(input_path: pathlib.Path) -> "Article":
+    @classmethod
+    def read_in(cls, input_path: pathlib.Path) -> Self:
         """Read an article from an HTML file."""
         soup = bs4.BeautifulSoup(input_path.read_text(encoding="utf-8"), "lxml")
 
@@ -81,7 +82,7 @@ class Article:
             if tag.has_attr("name") and tag.has_attr("content")
         }
 
-        return Article(
+        return cls(
             headline=metadata.get("title", "Untitled"),
             text_body=body,
             strapline=metadata.get("subtitle"),
