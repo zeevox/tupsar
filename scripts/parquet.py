@@ -3,100 +3,125 @@
 # requires-python = ">=3.12"
 # dependencies = [
 # "tqdm",
+# "loguru",
 # "beautifulsoup4",
 # "pypandoc",
 # "polars",
 # ]
 # ///
-import logging
+import dataclasses
 import random
 from pathlib import Path
+from typing import Self
 
 import polars as pl
-import pypandoc  # pyright: ignore [reportMissingImports]
+import pypandoc
 from bs4 import BeautifulSoup, SoupStrainer
+from loguru import logger  # Using loguru for enhanced logging
+from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 
-logger = logging.getLogger(__name__)
+logger.remove()
+logger.add(lambda msg: tqdm.write(msg, end=""), colorize=True)
 
-articles_dir: Path = Path("out")
-if not articles_dir.exists() or not articles_dir.is_dir():
-    msg = f"Directory {articles_dir} invalid"
-    raise FileNotFoundError(msg)
+ARTICLES_BASE_DIR: Path = Path("out")
+"""Directory containing HTML articles."""
 
-text_dir: Path = Path("txt")
-if not text_dir.exists() or not text_dir.is_dir():
-    logger.warning("Converted text dir %s does not exist", text_dir)
+OUTPUT_PARQUET_FILE: Path = Path("felix.parquet")
+"""Output Parquet filename."""
 
-SAMPLE: bool = False
+SAMPLE_SIZE: int = 0
+"""Number of articles to sample for testing. Set to 0 for all articles."""
 
-# all files recursively
-files = list(articles_dir.glob("**/*.html"))
-if SAMPLE:
-    files = random.sample(files, 100)
-
-type ArticleRow = tuple[
-    str, str, int, str, str, str, str | None, str | None, str | None
-]
-
-only_meta = SoupStrainer("meta")
+PROCESS_CHUNK_SIZE: int = 16
+"""Chunk size for parallel processing."""
 
 
-def read_article(path: Path) -> ArticleRow:
-    """Read an article from an HTML file."""
-    txt: Path = text_dir / f"{path.stem}.txt"
+@dataclasses.dataclass(frozen=True)
+class Article:
+    """Represents a single article."""
 
-    _, issue_page, _ = path.name.split("_", 2)
-    issue, page = issue_page.split("-")
-    page_no: int = int(page) + 1
+    filename: str
+    issue: str
+    page: int
+    headline: str
+    txt: str
+    html: str
+    strapline: str | None = None
+    author: str | None = None
+    category: str | None = None
 
-    html = path.read_text()
-    soup = BeautifulSoup(html, "html.parser", parse_only=only_meta)
+    @classmethod
+    def from_file(cls, path: Path) -> Self:
+        """Read an article from an HTML file."""
+        _, issue_page, _ = path.stem.split("_", 2)
+        issue, page_str = issue_page.split("-")
+        page_no: int = int(page_str) + 1
 
-    meta_tags = soup.find_all("meta")
-    metadata: dict[str, str] = {
-        tag.get("name"): tag.get("content")
-        for tag in meta_tags
-        if tag.has_attr("name") and tag.has_attr("content")
-    }
+        html = path.read_text()
+        soup = BeautifulSoup(html, "html.parser", parse_only=SoupStrainer("meta"))
 
-    return (
-        path.name,
-        issue,
-        page_no,
-        metadata.get("title", "Untitled"),
-        txt.read_text()
-        if txt.exists()
-        else pypandoc.convert_text(
-            str(html), "plain", format="html", extra_args=["--wrap=none"]
-        ),
-        html,
-        metadata.get("subtitle"),
-        metadata.get("author"),
-        metadata.get("category"),
+        metadata: dict[str, str] = {
+            tag["name"].lower(): tag["content"]  # Use lower case keys for consistency
+            for tag in soup.find_all("meta", attrs={"name": True, "content": True})
+        }
+
+        return cls(
+            filename=path.name,
+            issue=issue,
+            page=page_no,
+            # Provide default values directly in .get()
+            headline=metadata.get("title", "Untitled"),
+            txt=pypandoc.convert_text(
+                html,
+                "plain",
+                format="html",
+                verify_format=False,
+                extra_args=["--wrap=none"],
+            ),
+            html=html,  # Store original HTML if needed
+            strapline=metadata.get("subtitle"),  # Use consistent naming if possible
+            author=metadata.get("author"),
+            category=metadata.get("category"),
+        )
+
+
+def main() -> None:
+    """Convert a directory containing HTML articles into a Parquet dataset."""
+    if not ARTICLES_BASE_DIR.is_dir():
+        logger.error(f"Directory `{ARTICLES_BASE_DIR}` invalid or not found.")
+        raise SystemExit(1)  # Exit if source directory is invalid
+
+    logger.info("Enumerating HTML files...")
+    files = list(ARTICLES_BASE_DIR.rglob("*.html"))
+    logger.info(f"Found {len(files)} HTML files.")
+
+    if not files:
+        logger.warning("No HTML files found in the specified directory.")
+        return  # Exit gracefully if no files are found
+
+    if SAMPLE_SIZE:
+        if len(files) > SAMPLE_SIZE:
+            logger.info(f"Processing a random sample of {SAMPLE_SIZE} files.")
+            files = random.sample(files, SAMPLE_SIZE)
+        else:
+            logger.info("Sample size >= total files. Processing all found files.")
+
+    logger.info(f"Reading {len(files)} files...")
+    results: list[Article] = process_map(
+        Article.from_file,
+        files,
+        desc="Reading articles",
+        chunksize=PROCESS_CHUNK_SIZE,
     )
 
+    logger.info("Converting processed data to Polars DataFrame...")
+    articles_df = pl.from_records([dataclasses.asdict(article) for article in results])
 
-rows: list[ArticleRow] = process_map(
-    read_article, files, desc="Reading articles", chunksize=1
-)
+    logger.info(f"Saving DataFrame to Parquet file: {OUTPUT_PARQUET_FILE}")
+    articles_df.write_parquet(OUTPUT_PARQUET_FILE)
+    logger.info("Successfully saved data to Parquet.")
 
-# Convert to Polars DataFrame
-articles = pl.DataFrame(
-    rows,
-    schema=[
-        "path",
-        "issue",
-        "page",
-        "headline",
-        "text",
-        "html",
-        "strapline",
-        "author",
-        "category",
-    ],
-    orient="row",
-)
 
-# Save to Parquet
-articles.write_parquet("felix-test.parquet")
+if __name__ == "__main__":
+    main()
