@@ -1,6 +1,7 @@
 """Support large language model extraction pipelines."""
 
 import enum
+import os
 from collections.abc import Sequence
 from decimal import Decimal
 from pathlib import Path
@@ -11,7 +12,9 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.rate_limiters import InMemoryRateLimiter
 from langchain_core.runnables import Runnable, RunnableLambda
+from langchain_core.utils import convert_to_secret_str
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from PIL.Image import Resampling
 
 from tupsar.extractor.cost import CostTracker
@@ -26,7 +29,9 @@ class Model(enum.StrEnum):
     GEMINI_1_5 = "gemini-1.5"
     GEMINI_1_5_PRO = "gemini-1.5-pro"
     GEMINI_2_0 = "gemini-2.0"
+    GEMINI_2_5_PRO = "gemini-2.5-pro"
     CLAUDE_3_7 = "claude-3.7"
+    QWEN_2_5_VL_72B_INSTRUCT = "qwen-2.5-vl"
 
     def construct_model(self) -> BaseChatModel:
         """Return an instance of the corresponding LangChain model."""
@@ -34,8 +39,8 @@ class Model(enum.StrEnum):
             case self.CLAUDE_3_7:
                 return ChatAnthropic(
                     model_name="claude-3-7-sonnet-latest",
-                    temperature=0,
-                    max_tokens_to_sample=8192,
+                    temperature=0.2,
+                    max_tokens_to_sample=16384,
                     timeout=None,
                     max_retries=0,
                     rate_limiter=InMemoryRateLimiter(
@@ -71,10 +76,21 @@ class Model(enum.StrEnum):
                     ),
                 )
 
+            case self.GEMINI_2_5_PRO:
+                return ChatGoogleGenerativeAI(
+                    model="gemini-2.5-pro-exp-03-25",
+                    timeout=None,
+                    max_retries=1,
+                    rate_limiter=InMemoryRateLimiter(
+                        requests_per_second=5 / 60,  # 5 RPM
+                        max_bucket_size=5,
+                    ),
+                )
+
             case self.GEMINI_2_0:
                 return ChatGoogleGenerativeAI(
                     model="gemini-2.0-flash-001",
-                    temperature=0,
+                    temperature=0.2,
                     max_tokens=8192,
                     timeout=None,
                     max_retries=1,
@@ -82,6 +98,18 @@ class Model(enum.StrEnum):
                         requests_per_second=30,
                         max_bucket_size=30,
                     ),
+                )
+
+            case self.QWEN_2_5_VL_72B_INSTRUCT:
+                api_key: str | None = os.getenv("OPENROUTER_API_KEY")
+                if api_key is None:
+                    msg = "OPENROUTER_API_KEY environment variable not set"
+                    raise ValueError(msg)
+                return ChatOpenAI(
+                    api_key=convert_to_secret_str(api_key),
+                    base_url="https://openrouter.ai/api/v1",
+                    model="qwen/qwen2.5-vl-72b-instruct",
+                    temperature=0.2,
                 )
 
         raise ValueError
@@ -107,11 +135,20 @@ class Model(enum.StrEnum):
                     Decimal("0.075") / 1_000_000,
                     Decimal("0.30") / 1_000_000,
                 )
+            case self.GEMINI_2_5_PRO:
+                # Experimental model, free
+                return CostTracker(Decimal(0), Decimal(0))
             case self.CLAUDE_3_7:
                 # Input $3 Output $15 / MTok
                 return CostTracker(
                     Decimal(3) / 1_000_000,
                     Decimal(15) / 1_000_000,
+                )
+            case self.QWEN_2_5_VL_72B_INSTRUCT:
+                # Input $0.7 Output $0.7 / MTok
+                return CostTracker(
+                    Decimal("0.7") / 1_000_000,
+                    Decimal("0.7") / 1_000_000,
                 )
         raise ValueError
 

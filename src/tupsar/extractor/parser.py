@@ -77,7 +77,7 @@ class ArticleOutputParser(BaseGenerationOutputParser[Sequence[Article]]):
             or response_metadata.get("prompt_feedback", {}).get("block_reason", 0)
             or "missing"
         )
-        if finish_reason not in {"STOP", "end_turn", 0}:
+        if finish_reason not in {"STOP", "end_turn", "stop"}:
             msg = f"Unexpected finish reason: {finish_reason}"
             raise ArticleExtractionError(msg)
 
