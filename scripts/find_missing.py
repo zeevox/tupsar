@@ -19,8 +19,9 @@ def find_missing_scans(scans_dir: Path, articles_dir: Path) -> list[Path]:
     """Find unprocessed scans lacking any extracted articles."""
     articles = {
         # split on second underscore
-        "_".join(article.stem.split("_")[:2])
-        for article in articles_dir.iterdir()
+        "_".join(article.split("_")[:2])
+        for _, _, files in articles_dir.walk()
+        for article in files
     }
 
     missing_scans = {scan for scan in scans_dir.iterdir() if scan.stem not in articles}
