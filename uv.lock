@@ -364,6 +364,15 @@ wheels = [
 ]
 
 [[package]]
+name = "diff-match-patch"
+version = "20241021"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0e/ad/32e1777dd57d8e85fa31e3a243af66c538245b8d64b7265bec9a61f2ca33/diff_match_patch-20241021.tar.gz", hash = "sha256:beae57a99fa48084532935ee2968b8661db861862ec82c6f21f4acdd6d835073", size = 39962 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f7/bb/2aa9b46a01197398b901e458974c20ed107935c26e44e37ad5b0e5511e44/diff_match_patch-20241021-py3-none-any.whl", hash = "sha256:93cea333fb8b2bc0d181b0de5e16df50dd344ce64828226bda07728818936782", size = 43252 },
+]
+
+[[package]]
 name = "distlib"
 version = "0.3.9"
 source = { registry = "https://pypi.org/simple" }
@@ -1901,20 +1910,6 @@ wheels = [
 ]
 
 [[package]]
-name = "redlines"
-version = "0.5.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "click" },
-    { name = "rich" },
-    { name = "rich-click" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/3b/b7/877ecb46f4f3e1ef5f75f4a272ba34fffae087ceebf49bae4785ab3d17e1/redlines-0.5.1.tar.gz", hash = "sha256:3474e2ce76b50695ac4ab2999a8c7bb8949b99f76083f0d8ebd510a0e4d888f8", size = 10711 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/fc/ec/9095a088bc0db80bd6daa752ba5d92b838213065fe02d172a3f14d6dd967/redlines-0.5.1-py3-none-any.whl", hash = "sha256:aa7bbe263d2bf46a0ea880b8d92ffd4d869b4a7c444b1e2fde307fbb7763a7b7", size = 12741 },
-]
-
-[[package]]
 name = "referencing"
 version = "0.36.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2345,7 +2340,8 @@ source = { editable = "." }
 dependencies = [
     { name = "asyncstdlib" },
     { name = "beautifulsoup4" },
-    { name = "ipywidgets" },
+    { name = "click" },
+    { name = "diff-match-patch" },
     { name = "langchain-anthropic" },
     { name = "langchain-core" },
     { name = "langchain-google-genai" },
@@ -2357,15 +2353,16 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "python-frontmatter" },
     { name = "rapidfuzz" },
-    { name = "redlines" },
     { name = "rich" },
     { name = "rich-argparse" },
+    { name = "rich-click" },
     { name = "scikit-image" },
     { name = "unidecode" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "ipywidgets" },
     { name = "matplotlib" },
     { name = "natsort" },
     { name = "notebook" },
@@ -2380,7 +2377,8 @@ dev = [
 requires-dist = [
     { name = "asyncstdlib", specifier = ">=3.13.1" },
     { name = "beautifulsoup4", specifier = ">=4.13.3" },
-    { name = "ipywidgets", specifier = ">=8.1.5" },
+    { name = "click", specifier = ">=8.1.8" },
+    { name = "diff-match-patch", specifier = ">=20241021" },
     { name = "langchain-anthropic", specifier = ">=0.3.10" },
     { name = "langchain-core", specifier = ">=0.3.49" },
     { name = "langchain-google-genai", specifier = ">=2.1.2" },
@@ -2392,15 +2390,16 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "python-frontmatter", specifier = ">=1.1.0" },
     { name = "rapidfuzz", specifier = ">=3.12.2" },
-    { name = "redlines", specifier = ">=0.5.1" },
     { name = "rich", specifier = ">=13.9.4" },
     { name = "rich-argparse", specifier = ">=1.7.0" },
+    { name = "rich-click", specifier = ">=1.8.8" },
     { name = "scikit-image", specifier = ">=0.25.2" },
     { name = "unidecode", specifier = ">=1.3.8" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "ipywidgets", specifier = ">=8.1.5" },
     { name = "matplotlib", specifier = ">=3.10.1" },
     { name = "natsort", specifier = ">=8.4.0" },
     { name = "notebook", specifier = ">=7.4.0b3" },

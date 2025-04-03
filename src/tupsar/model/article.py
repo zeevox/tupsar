@@ -5,9 +5,11 @@ import pathlib
 import re
 import textwrap
 import unicodedata
+from functools import cached_property
 from typing import Self
 
 import bs4
+import pypandoc  # type:ignore[reportMissingTypeStubs]
 
 formatter = bs4.formatter.HTMLFormatter(indent=0)
 
@@ -22,13 +24,14 @@ class Article:
     author_name: str | None = None
     category: str | None = None
 
-    @property
+    @cached_property
     def slug(self) -> str:
         """Turn the headline into a slug."""
         return slugify(textwrap.shorten(self.headline, width=60))
 
-    def write_out(self, output_path: pathlib.Path) -> None:
-        """Save the article to an HTML file."""
+    @cached_property
+    def html(self) -> str:
+        """Convert the article to HTML."""
         article_meta = {
             "title": self.headline.replace("\n", " "),
             "subtitle": self.strapline,
@@ -61,7 +64,31 @@ class Article:
         html.append(head)
         html.append(article_body)
 
-        output_path.write_text(html.prettify(formatter=formatter), encoding="utf-8")
+        return html.prettify(formatter=formatter)
+
+    def write_out(self, output_path: pathlib.Path) -> None:
+        """Save the article to an HTML file."""
+        output_path.write_text(self.html, encoding="utf-8")
+
+    @cached_property
+    def txt(self) -> str:
+        """Convert the article to plain text."""
+        content: list[str] = [self.headline]
+        if self.strapline:
+            content.append(self.strapline)
+        if self.author_name:
+            content.append(f"By {self.author_name}")
+        content.append(
+            pypandoc.convert_text(
+                str(self.text_body),
+                to="plain",
+                format="html",
+                extra_args=["--wrap=none"],
+                verify_format=False,
+            )
+        )
+
+        return "\n\n".join(content)
 
     @classmethod
     def read_in(cls, input_path: pathlib.Path) -> Self:
