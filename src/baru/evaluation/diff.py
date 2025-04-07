@@ -1,10 +1,21 @@
 from typing import Literal
 
 import diff_match_patch
-import rich.text
+from rich.style import Style
+from rich.text import Text
 from unidecode import unidecode
 
+type DmpDiff = tuple[Literal[-1, 0, 1], str]
+
 COLLAPSE_THRESHOLD = 5
+
+INSERTION_STYLE = Style(color="bright_green", bgcolor="dark_green", bold=True)
+DELETION_STYLE = Style(color="bright_red", bgcolor="dark_red", bold=True)
+
+OP_STYLE_MAP: dict[int, Style] = {
+    1: INSERTION_STYLE,
+    -1: DELETION_STYLE,
+}
 
 
 def compute_diff(
@@ -27,11 +38,9 @@ def compute_diff(
     return diffs
 
 
-def diff_to_rich(
-    diffs: list[tuple[Literal[-1, 0, 1], str]], *, collapse: bool = True
-) -> rich.text.Text:
+def diff_to_rich(diffs: list[DmpDiff], *, collapse: bool = True) -> Text:
     """Convert a diff-match-patch diff to a rich text object."""
-    rich_text = rich.text.Text()
+    rich_text = Text()
 
     ended_newline = True
     for op, segment in diffs:
@@ -51,13 +60,9 @@ def diff_to_rich(
                     rich_text.append(last)
             else:
                 rich_text.append(segment)
-        elif op == 1:  # Insertion.
-            rich_text.append(segment, style="bold green")
-        elif op == -1:  # Deletion.
-            rich_text.append(segment, style="bold strike red")
         else:
-            msg = f"Unexpected diff operation: {op}"
-            raise ValueError(msg)
+            # replace newlines with U+23CE ⏎ RETURN SYMBOL
+            rich_text.append(segment.replace("\n", "\u23ce\n"), OP_STYLE_MAP.get(op))
 
         ended_newline = segment.endswith("\n")
 

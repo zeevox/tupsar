@@ -1,6 +1,5 @@
 import logging
 import pathlib
-from pathlib import Path
 from typing import Final
 
 import rich_click as click
@@ -29,10 +28,7 @@ def configure_logging(_ctx: click.Context, _param: click.Parameter, value: int) 
         level=LOG_LEVELS[value],
         format="%(message)s",
         datefmt="[%X]",
-        handlers=[
-            RichHandler(rich_tracebacks=True, console=console),
-            logging.FileHandler(Path(CLI_NAME).with_suffix(".log"), encoding="utf-8"),
-        ],
+        handlers=[RichHandler(rich_tracebacks=True, console=console)],
     )
 
 
