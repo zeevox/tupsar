@@ -1,11 +1,16 @@
 import logging
-import pathlib
+from pathlib import Path
 from typing import Final
 
 import rich_click as click
+from dotenv import load_dotenv
+from openai import OpenAI
 from rich.console import Console
 from rich.logging import RichHandler
 
+from baru.batch.chunk import ChunkConfig, create_batches
+from baru.embedding.merge import merge_embeddings
+from baru.embedding.submit import submit_batch_job
 from baru.evaluation.diff import compute_diff, diff_to_rich
 from tupsar.model.article import Article
 
@@ -55,7 +60,7 @@ def cli() -> None:
         exists=True,
         file_okay=True,
         dir_okay=False,
-        path_type=pathlib.Path,
+        path_type=Path,
     ),
     metavar="<dir>",
 )
@@ -65,7 +70,7 @@ def cli() -> None:
         exists=True,
         file_okay=True,
         dir_okay=False,
-        path_type=pathlib.Path,
+        path_type=Path,
     ),
     metavar="<dir>",
 )
@@ -90,10 +95,10 @@ def cli() -> None:
     "date is returned. While guaranteed to be correct, it may not be "
     "optimal. A timeout of '0' allows for unlimited computation.",
 )
-def diff(file1: pathlib.Path, file2: pathlib.Path, timeout: int, cleanup: int) -> None:
+def diff(file1: Path, file2: Path, timeout: int, cleanup: int) -> None:
     """Embed the articles in the database."""
 
-    def read_text(file: pathlib.Path) -> str:
+    def read_text(file: Path) -> str:
         """Read text from a file."""
         if file.suffix == ".html":
             return Article.read_in(file).txt
@@ -107,3 +112,98 @@ def diff(file1: pathlib.Path, file2: pathlib.Path, timeout: int, cleanup: int) -
     )
     rich_diff = diff_to_rich(diffs)
     console.print(rich_diff)
+
+
+@cli.command(short_help="Split dataset for batch processing.")
+@click.argument(
+    "dataset",
+    type=click.Path(
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        path_type=Path,
+    ),
+    metavar="<file>",
+)
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(
+        exists=False,
+        path_type=Path,
+    ),
+    default=None,
+    help="Base output filename for prepared embedding jobs.",
+)
+@click.option(
+    "-e",
+    "--endpoint",
+    type=str,
+    default="/v1/embeddings",
+    help="API endpoint to use.",
+)
+@click.option(
+    "-m",
+    "--model",
+    type=str,
+    default="text-embedding-3-large",
+    help="Name of the model to use.",
+)
+def chunk(
+    dataset: Path,
+    endpoint: str,
+    model: str,
+    output: Path | None = None,
+) -> None:
+    """Prepare dataset for embedding."""
+    create_batches(
+        ChunkConfig(endpoint=endpoint, model_name=model),
+        dataset,
+        output,
+    )
+
+
+@cli.command(short_help="Submit a prepared embedding job.")
+@click.argument(
+    "job",
+    type=click.Path(
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        path_type=Path,
+    ),
+    metavar="<file>",
+)
+def submit(job: Path) -> None:
+    """Submit a prepared embedding job."""
+    load_dotenv()  # Load API key from environment variables
+    client = OpenAI()
+    job_id = submit_batch_job(client, job)
+    logger.info("Batch job submitted: %s", job_id)
+
+
+@cli.command(short_help="Merge embeddings batch job output with the dataset.")
+@click.argument(
+    "dataset",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, path_type=Path),
+    metavar="<dataset>",
+)
+@click.argument(
+    "jsonl",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, path_type=Path),
+    metavar="<batch_output>",
+)
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(exists=False, path_type=Path),
+    default=None,
+    help="Output filename for merged dataset.",
+)
+def merge(dataset: Path, jsonl: Path, output: Path | None = None) -> None:
+    """Merge downloaded embeddings batch job output with a dataset."""
+    if output is None:
+        output = dataset.with_stem(f"{dataset.stem}_merged")
+
+    merge_embeddings(dataset, jsonl, output)
+    logger.info("Merged dataset saved to: %s", output)
