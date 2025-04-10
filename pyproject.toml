@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Digitise newspaper scans to articles"
 readme = "README.md"
 authors = [
-    { name = "Timothy Langer", email = "zeevox.dev@gamil.com" }
+    { name = "Timothy Langer", email = "zeevox.dev@gmail.com" }
 ]
 requires-python = ">=3.13"
 dependencies = [
@@ -13,17 +13,17 @@ dependencies = [
     "click>=8.1.8",
     "diff-match-patch>=20241021",
     "langchain-anthropic>=0.3.10",
-    "langchain-core>=0.3.49",
+    "langchain-core>=0.3.51",
     "langchain-google-genai>=2.1.2",
-    "langchain-openai>=0.3.11",
-    "lxml>=5.3.1",
+    "langchain-openai>=0.3.12",
+    "lxml>=5.3.2",
     "pillow>=11.1.0",
-    "polars>=1.26.0",
+    "polars>=1.27.0",
     "pypandoc>=1.15",
     "python-dotenv>=1.1.0",
     "python-frontmatter>=1.1.0",
-    "rapidfuzz>=3.12.2",
-    "rich>=13.9.4",
+    "rapidfuzz>=3.13.0",
+    "rich>=14.0.0",
     "rich-argparse>=1.7.0",
     "rich-click>=1.8.8",
     "scikit-image>=0.25.2",
@@ -43,16 +43,15 @@ dev = [
     "ipywidgets>=8.1.5",
     "matplotlib>=3.10.1",
     "natsort>=8.4.0",
-    "notebook>=7.4.0b3",
+    "notebook>=7.4.0",
     "pre-commit>=4.2.0",
-    "pyright>=1.1.398",
-    "ruff>=0.11.2",
+    "pyright>=1.1.399",
+    "ruff>=0.11.4",
     "seaborn>=0.13.2",
     "types-beautifulsoup4>=4.12.0.20250204",
 ]
 
 [tool.uv]
-reinstall-package = ["tupsar", "baru"]
 prerelease = "allow"
 
 [tool.ruff.format]
@@ -76,7 +75,8 @@ ignore = [
     "D212", # prefer D213
     "COM812", # unnecessary rule
     "D100", # I don't need doc comments
-    "EXE003" # use uv for scripts instead of python shebang
+    "EXE003", # use uv for scripts instead of python shebang
+    "PLC0415", # okay to import outside top-level to defer a costly module load
 ]
 
 [tool.pyright]
