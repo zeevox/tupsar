@@ -86,7 +86,11 @@ def create_batches(
     output_path: Path | None = None,
 ) -> list[Path]:
     """Create a series of batch files for sending to the API."""
-    dataset = pl.read_parquet(dataset_path)
+    dataset = (
+        pl.scan_parquet(dataset_path)
+        .select(["filename", "headline", "strapline", "author", "txt"])
+        .collect()
+    )
     task_lines: list[BatchTask] = thread_map(
         functools.partial(BatchTask.from_row, config=config),
         dataset.to_dicts(),
