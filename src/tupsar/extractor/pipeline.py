@@ -7,15 +7,11 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Final
 
-from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.rate_limiters import InMemoryRateLimiter
 from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_core.utils import convert_to_secret_str
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_openai import ChatOpenAI
-from PIL.Image import Resampling
 
 from tupsar.extractor.cost import CostTracker
 from tupsar.extractor.parser import ArticleOutputParser
@@ -29,28 +25,19 @@ class Model(enum.StrEnum):
     GEMINI_1_5 = "gemini-1.5"
     GEMINI_1_5_PRO = "gemini-1.5-pro"
     GEMINI_2_0 = "gemini-2.0"
-    GEMINI_2_5_PRO = "gemini-2.5-pro"
     CLAUDE_3_7 = "claude-3.7"
+    GPT_4_1 = "gpt-4.1"
     QWEN_2_5_VL_72B_INSTRUCT = "qwen-2.5-vl"
 
     def construct_model(self) -> BaseChatModel:
         """Return an instance of the corresponding LangChain model."""
         match self:
             case self.CLAUDE_3_7:
-                return ChatAnthropic(
-                    model_name="claude-3-7-sonnet-latest",
-                    temperature=0.2,
-                    max_tokens_to_sample=16384,
-                    timeout=None,
-                    max_retries=0,
-                    rate_limiter=InMemoryRateLimiter(
-                        requests_per_second=0.2,
-                        max_bucket_size=3,
-                    ),
-                    stop=["\n\nHuman:"],
-                )
+                return self.create_openrouter_model("anthropic/claude-3.7-sonnet")
 
             case self.GEMINI_1_5:
+                from langchain_google_genai import ChatGoogleGenerativeAI
+
                 return ChatGoogleGenerativeAI(
                     model="gemini-1.5-flash-002",
                     temperature=0,
@@ -64,6 +51,8 @@ class Model(enum.StrEnum):
                 )
 
             case self.GEMINI_1_5_PRO:
+                from langchain_google_genai import ChatGoogleGenerativeAI
+
                 return ChatGoogleGenerativeAI(
                     model="gemini-1.5-pro-002",
                     temperature=0,
@@ -76,18 +65,9 @@ class Model(enum.StrEnum):
                     ),
                 )
 
-            case self.GEMINI_2_5_PRO:
-                return ChatGoogleGenerativeAI(
-                    model="gemini-2.5-pro-exp-03-25",
-                    timeout=None,
-                    max_retries=1,
-                    rate_limiter=InMemoryRateLimiter(
-                        requests_per_second=5 / 60,  # 5 RPM
-                        max_bucket_size=5,
-                    ),
-                )
-
             case self.GEMINI_2_0:
+                from langchain_google_genai import ChatGoogleGenerativeAI
+
                 return ChatGoogleGenerativeAI(
                     model="gemini-2.0-flash-001",
                     temperature=0.2,
@@ -100,19 +80,33 @@ class Model(enum.StrEnum):
                     ),
                 )
 
-            case self.QWEN_2_5_VL_72B_INSTRUCT:
-                api_key: str | None = os.getenv("OPENROUTER_API_KEY")
-                if api_key is None:
-                    msg = "OPENROUTER_API_KEY environment variable not set"
-                    raise ValueError(msg)
-                return ChatOpenAI(
-                    api_key=convert_to_secret_str(api_key),
-                    base_url="https://openrouter.ai/api/v1",
-                    model="qwen/qwen2.5-vl-72b-instruct",
-                    temperature=0.2,
-                )
+            case self.GPT_4_1:
+                return self.create_openrouter_model("openai/gpt-4.1", temperature=1.0)
 
+            case self.QWEN_2_5_VL_72B_INSTRUCT:
+                return self.create_openrouter_model("qwen/qwen2.5-vl-72b-instruct")
         raise ValueError
+
+    @staticmethod
+    def create_openrouter_model(
+        model_name: str, **overrides: float | str
+    ) -> BaseChatModel:
+        """Create a model provided through OpenRouter."""
+        from langchain_openai import ChatOpenAI
+
+        api_key: str | None = os.getenv("OPENROUTER_API_KEY")
+        if api_key is None:
+            msg = "OPENROUTER_API_KEY environment variable not set"
+            raise ValueError(msg)
+        params = dict(  # noqa: C408
+            api_key=convert_to_secret_str(api_key),
+            base_url="https://openrouter.ai/api/v1",
+            model=model_name,
+            temperature=0.2,
+            top_p=0.8,
+            max_completion_tokens=16384,
+        )
+        return ChatOpenAI(**{**params, **overrides})
 
     def get_cost_tracker(self) -> CostTracker:
         """Return the cost tracker for the model."""
@@ -135,9 +129,6 @@ class Model(enum.StrEnum):
                     Decimal("0.075") / 1_000_000,
                     Decimal("0.30") / 1_000_000,
                 )
-            case self.GEMINI_2_5_PRO:
-                # Experimental model, free
-                return CostTracker(Decimal(0), Decimal(0))
             case self.CLAUDE_3_7:
                 # Input $3 Output $15 / MTok
                 return CostTracker(
@@ -149,6 +140,12 @@ class Model(enum.StrEnum):
                 return CostTracker(
                     Decimal("0.7") / 1_000_000,
                     Decimal("0.7") / 1_000_000,
+                )
+            case self.GPT_4_1:
+                # Input: $3.00 / 1M tokens Output: $12.00 / 1M tokens
+                return CostTracker(
+                    Decimal("3.00") / 1_000_000,
+                    Decimal("12.00") / 1_000_000,
                 )
         raise ValueError
 
@@ -172,13 +169,13 @@ SYSTEM_PROMPT = (
     "For each <article> you identify, add the following to the <header>\n"
     "  a. <headline>: article headline\n"
     "  b. <strapline>: the subhead or dek, if specified.\n"
-    "  c. <author_name>\n"
+    "  c. <author_name>: person who wrote the article, or signatory for letters. "
     "  d. <category>: the section of the newspaper to which the article belongs.\n"
     "Then in the <main> write the article contents in HTML format. "
     "Please reflow each article into coherent paragraphs. "
     "Ensure the transcription is as accurate as possible. "
     "Preserve original punctuation, capitalisation, and formatting. "
-    "Ignore images and advertisements."
+    "Ignore images, image captions, advertisements and puzzles like crosswords. "
 )
 USER_PROMPT = "Process the entire newspaper scan. Begin the task now."
 PROMPT_TEMPLATE: Final[ChatPromptTemplate] = ChatPromptTemplate.from_messages([
@@ -199,7 +196,4 @@ PROMPT_TEMPLATE: Final[ChatPromptTemplate] = ChatPromptTemplate.from_messages([
 def prepare_image(path: Path) -> dict[str, str]:
     """Prepare an image for processing."""
     image = open_image(path)
-    max_size: int = 3072
-    if max(image.size) > max_size:
-        image.thumbnail((max_size, max_size), resample=Resampling.LANCZOS)
     return {"image_data": pillow_image_to_base64_string(image)}
