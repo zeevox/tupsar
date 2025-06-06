@@ -3,7 +3,6 @@
 import argparse
 import asyncio
 import logging
-from logging import FileHandler
 from pathlib import Path
 from typing import Final
 
@@ -87,7 +86,6 @@ def cli() -> None:
         datefmt="[%X]",
         handlers=[
             RichHandler(rich_tracebacks=True, console=console),
-            FileHandler("tupsar.log", encoding="utf-8"),
         ],
     )
 

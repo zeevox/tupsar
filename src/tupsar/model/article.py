@@ -77,7 +77,7 @@ class Article:
         if self.strapline:
             content.append(self.strapline)
         if self.author_name:
-            content.append(f"By {self.author_name}")
+            content.append(f"Author: {self.author_name}")
         content.append(
             pypandoc.convert_text(
                 str(self.text_body),
